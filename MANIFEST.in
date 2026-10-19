@@ -1,0 +1,4 @@
+include VERSION LICENSE *.md
+recursive-include tests *.py
+graft examples
+global-exclude __pycache__ *.py[cod]

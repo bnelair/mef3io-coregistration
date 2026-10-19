@@ -1,0 +1,68 @@
+name: bump-version
+
+# Manual release trigger: bumps VERSION (the single source of truth), commits, tags vX.Y.Z and
+# starts the release workflow on that tag.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "patch | minor | major, or an explicit version like 1.2.3"
+        required: true
+        default: "patch"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Releases only from main
+        if: github.ref_name != 'main'
+        run: |
+          echo "::error::run bump-version from main (was ${{ github.ref_name }})"
+          exit 1
+      - uses: actions/checkout@v4
+
+      - name: Compute new version
+        id: ver
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          cur=$(tr -d ' \n' < VERSION)
+          base="${cur%%[a-z]*}"
+          IFS=. read -r major minor patch <<< "$base"
+          case "$BUMP" in
+            patch) [ "$base" != "$cur" ] && new="$base" || new="$major.$minor.$((patch + 1))" ;;  # 1.2.0rc1 → 1.2.0
+            minor) new="$major.$((minor + 1)).0" ;;
+            major) new="$((major + 1)).0.0" ;;
+            *)
+              new="$BUMP"
+              [[ "$new" =~ ^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]] || { echo "::error::bad version: $new"; exit 1; }
+              ;;
+          esac
+          tags=$(git ls-remote --tags origin "refs/tags/v$new")  # fails the step if the remote cannot be read
+          [ -z "$tags" ] || { echo "::error::v$new exists"; exit 1; }
+          echo "current $cur -> new $new"
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+
+      - name: Commit VERSION and tag
+        run: |
+          new="${{ steps.ver.outputs.new }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ "$new" != "$(tr -d ' \n' < VERSION)" ]; then
+            echo "$new" > VERSION
+            git add VERSION
+            git commit -m "Release v$new"
+          fi  # an explicit version equal to VERSION releases the current commit as it is
+          git tag "v$new"
+          git push --atomic origin "HEAD:${{ github.ref_name }}" "refs/tags/v$new"
+
+      # Tags pushed with GITHUB_TOKEN do not trigger push events, so start the release run on
+      # the new tag explicitly.
+      - name: Dispatch release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref "v${{ steps.ver.outputs.new }}"
