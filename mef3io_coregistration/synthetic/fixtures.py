@@ -160,7 +160,7 @@ def _manifest_is_current(manifest_path: Path, name: str, profile: dict) -> bool:
     if not manifest_path.exists():
         return False
     try:
-        stored = json.loads(manifest_path.read_text())
+        stored = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
     expected = _manifest_dict(name, profile)
@@ -187,7 +187,7 @@ def _generate(name: str, profile: dict, fixture_dir: Path) -> None:
     )
     _write_mef(fixture_dir / "reference.mefd", rendered.ref, rendered.fs_ref, rendered.ref_start_uutc)
     _write_mef(fixture_dir / "moving.mefd", rendered.mov, rendered.fs_moving, rendered.mov_start_uutc)
-    (fixture_dir / "manifest.json").write_text(json.dumps(_manifest_dict(name, profile), indent=2))
+    (fixture_dir / "manifest.json").write_text(json.dumps(_manifest_dict(name, profile), indent=2), encoding="utf-8")
 
 
 def _write_mef(path: Path, data: np.ndarray, fs: float, start_uutc: int) -> None:

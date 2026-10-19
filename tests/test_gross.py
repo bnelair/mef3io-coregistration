@@ -2,9 +2,9 @@
 
 Stage 1 correlates the **decimated waveform**, not the min-max envelope: the envelope
 summarises each file's raw signal at that file's own bandwidth, so it is not a shared physical
-quantity across two amplifiers and cannot align them (see align/gross.py, REVIEW B1).
+quantity across two amplifiers and cannot align them (see align/gross.py).
 
-R4.1 full-length correlation; R4.2 absorbs offsets >= 10 minutes; recovered offset within
+Covers: full-length correlation; absorbs offsets >= 10 minutes; recovered offset within
 ±1 s. Plus the property the old design lacked: Stage 1 must *know when it has not locked*.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from mef3io_coregistration.io.derived import Decimated
 from mef3io_coregistration.synthetic.warp import WarpSpec
 
 
-@pytest.mark.parametrize("offset0", [120.0, 600.0])  # 2 min and 10 min (R4.2)
+@pytest.mark.parametrize("offset0", [120.0, 600.0])  # 2 min and 10 min
 def test_recovers_constant_offset_within_one_second(offset0):
     pair = build_pair(WarpSpec("constant", offset0_s=offset0), duration_s=900.0)
     g = estimate_gross_offset(pair.ref_dec, pair.mov_dec)
@@ -39,9 +39,9 @@ def test_recovers_offset_with_small_drift():
 
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_reports_no_lock_on_unrelated_signals(seed):
-    """The property that matters most (REVIEW B1): when the two recordings share no signal,
+    """The property that matters most: when the two recordings share no signal,
     Stage 1 must say so rather than return the argmax of a flat correlation surface. The old
-    implementation reported confidence 0.000, drew it in a stat box, marked the stage done, and
+    implementation reported confidence 0.000, displayed it, marked the stage done, and
     let Stage 2 refine the garbage into an anchor."""
     pair = build_pair(WarpSpec("constant", offset0_s=120.0), duration_s=900.0)
     rng = np.random.default_rng(seed)
@@ -96,7 +96,7 @@ def _with_rhythm(dec: Decimated, offset_s: float, phase: float, hz: float = 2.0)
 
 
 def test_verification_rejects_a_globally_wrong_offset():
-    """The check that stands between a wrong seed and a confident clock map (REVIEW-2 N1).
+    """The check that stands between a wrong seed and a confident clock map.
 
     Stage 2/3 confidence is computed on a +/-0.25 s surface around wherever it was pointed, so it
     cannot tell a right seed from one that is an hour out — measured, it scores the wrong seed

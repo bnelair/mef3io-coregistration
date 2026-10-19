@@ -1,7 +1,7 @@
 """Tests for the CoregSession orchestration.
 
-End-to-end recover-known-drift through the session, product reuse vs. distinct loads (R11.5),
-in-memory products held until close (R11.1/R11.4), and the emitted result driving the reader.
+End-to-end recover-known-drift through the session, product reuse vs. distinct loads,
+in-memory products held until close, and the emitted result driving the reader.
 Uses ``background=False`` for deterministic in-process loading (the multiprocessing paths are
 covered in test_loader.py).
 """
@@ -66,7 +66,7 @@ def test_end_to_end_recovers_drift_and_reader_reconstructs(tmp_path):
 
 
 def test_matching_channels_reuse_one_load(tmp_path):
-    """Fine channels equal to gross channels reuse the loaded products (R11.5): only the two
+    """Fine channels equal to gross channels reuse the loaded products: only the two
     files' products are held, not four."""
     sess, _pair = _session(tmp_path)
     sess.set_channels("gross", "eeg")
@@ -77,7 +77,7 @@ def test_matching_channels_reuse_one_load(tmp_path):
 
 
 def test_distinct_channels_load_separately(tmp_path):
-    """Different fine channels load their own products (R11.5): four products in memory."""
+    """Different fine channels load their own products: four products in memory."""
     sess, _pair = _session(tmp_path, channels=("eeg1", "eeg2"))
     sess.set_channels("gross", "eeg1")
     sess.set_channels("fine", "eeg2")
@@ -122,7 +122,7 @@ def test_errors_when_stage_prerequisites_missing(tmp_path):
 
 
 def test_refuses_to_build_on_a_failed_lock(tmp_path):
-    """Stage 2 must not run on an unlocked Stage 1 (REVIEW B1). The old pipeline reported
+    """Stage 2 must not run on an unlocked Stage 1. The old pipeline reported
     confidence 0.000 and happily refined a three-hour error into an anchor."""
     sess, pair = _session(tmp_path)
     sess.set_channels("gross", "eeg")
@@ -135,7 +135,7 @@ def test_refuses_to_build_on_a_failed_lock(tmp_path):
     with pytest.raises(NotLocked, match="NO LOCK"):
         sess.run_fine(pair.roi_uutc(600.0))
 
-    # ...but a human who has looked at the overlay may place the offset by hand (R4.3/R9.1),
+    # ...but a human who has looked at the overlay may place the offset by hand,
     # and that IS a lock — the escape hatch the tool exists to provide.
     sess.manual_offset(pair.gt_offset_s(600.0))
     anchor = sess.run_fine(pair.roi_uutc(600.0))
@@ -163,7 +163,7 @@ def test_an_unlocked_estimate_can_be_accepted_and_is_recorded(tmp_path):
 
 def test_per_file_channels_and_polarity(tmp_path):
     """Channels are selected INDEPENDENTLY per file, and swapping a bipolar pair on one file is
-    exactly a polarity inversion (R3.2/R3.3).
+    exactly a polarity inversion.
 
     This is what makes the tool usable when the two systems reference their channels in opposite
     senses — the same physiology arrives inverted — and when they simply do not name or carry the
@@ -216,7 +216,7 @@ def test_manual_offset_uses_the_offset_the_user_placed(tmp_path):
 
 
 def test_map_without_drift_from_a_constant_offset(tmp_path):
-    """Stage 3 can be bypassed and still yield a real, usable, verified clock map (R6, R7).
+    """Stage 3 can be bypassed and still yield a real, usable, verified clock map.
 
     On a short recording — or a short overlap — the clocks have no room to drift, and running a
     sliding-window estimator anyway does not measure drift: it fits the estimator's own scatter

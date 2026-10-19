@@ -1,4 +1,4 @@
-"""Session: interactive state, persistence, background loaders (Milestone M5, R11)."""
+"""Session: interactive state, persistence, background loaders."""
 from __future__ import annotations
 
 from mef3io_coregistration.result import CoregResult

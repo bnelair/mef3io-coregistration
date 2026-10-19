@@ -1,4 +1,4 @@
-"""In-memory rendered pairs for the alignment-stage tests (Milestone M4).
+"""In-memory rendered pairs for the alignment-stage tests.
 
 Not a test module (leading underscore → not collected). ``build_pair`` renders a
 reference/moving pair with a known warp and returns the derived products the stages consume:
@@ -88,8 +88,8 @@ def write_pair(
     warped signal, for exercising channel selection/reuse).
 
     ``moving_only`` channels are written to the moving file **and not the reference** — the
-    real case, where the clinical system records 209 channels and the cadence system a subset
-    of 19. A coregistered read of those channels is what the tool exists for (REVIEW B4).
+    usual case, where a clinical system records many channels and a second recorder only a
+    subset. A coregistered read of those channels is what the tool exists for.
     """
     rp = render_pair(spec, duration_s, fs_ref, fs_mov, _START, seed=seed)
     ref_p = Path(dir_path) / "reference.mefd"

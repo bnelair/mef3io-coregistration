@@ -13,14 +13,14 @@ archive). Pass their current paths:
 from mef3io_coregistration.reader import CoregisteredRecording, CoregisteredSession
 
 rec = CoregisteredRecording.open(
-    "results/patient07.coreg.json",
-    file_a="/data/patient07/system_a.mefd",
-    file_b="/data/patient07/system_b.mefd.tar",
+    "results/subject01.coreg.json",
+    file_a="/data/subject01/recording_a.mefd",
+    file_b="/data/subject01/recording_b.mefd.tar",
 )
 
-with CoregisteredSession("results/patient07.coreg.json", file="B",
-                         file_a="/data/patient07/system_a.mefd",
-                         file_b="/data/patient07/system_b.mefd.tar") as r:
+with CoregisteredSession("results/subject01.coreg.json", file="B",
+                         file_a="/data/subject01/recording_a.mefd",
+                         file_b="/data/subject01/recording_b.mefd.tar") as r:
     ...
 ```
 
@@ -56,11 +56,11 @@ preferences, corrections) can be saved next to the result and reopened in one
 line, with the same path overrides:
 
 ```python
-rec.save_config("results/patient07.mapping.json", result_path="results/patient07.coreg.json")
+rec.save_config("results/subject01.mapping.json", result_path="results/subject01.coreg.json")
 
 rec = CoregisteredRecording.from_config(
-    "results/patient07.mapping.json",
-    file_a="/data/patient07/system_a.mefd", file_b="/data/patient07/system_b.mefd.tar",
+    "results/subject01.mapping.json",
+    file_a="/data/subject01/recording_a.mefd", file_b="/data/subject01/recording_b.mefd.tar",
 )
 ```
 

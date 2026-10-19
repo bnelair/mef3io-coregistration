@@ -11,24 +11,30 @@ its clock is the one everything is expressed on, and it is never resampled.
 ```python
 from mef3io_coregistration.session import CoregSession
 
-with CoregSession() as sess:
-    sess.open("system_a.mefd", "system_b.mefd", reference="A")
 
-    # The channel to align on, for each stage. The same name in both files, or
-    # per file: reference=("LA1", None), moving=("EEG LA1-Ref", "Fz").
-    sess.set_channels("gross", "C3")
-    sess.set_channels("fine", "C3")
+def main():
+    with CoregSession() as sess:
+        sess.open("system_a.mefd", "system_b.mefd", reference="A")
 
-    gross = sess.run_gross()                      # Stage 1: whole recording
-    print(gross.offset_s, gross.locked, gross.reason)
+        # The channel to align on, for each stage. The same name in both files, or
+        # per file: reference=("LA1", None), moving=("EEG LA1-Ref", "Fz").
+        sess.set_channels("gross", "C3")
+        sess.set_channels("fine", "C3")
 
-    anchor = sess.run_fine(t_roi)                 # Stage 2: at t_roi (reference-clock uUTC)
-    print(anchor.offset_s, anchor.confidence)     # call again at other places for more anchors
+        gross = sess.run_gross()                      # Stage 1: whole recording
+        print(gross.offset_s, gross.locked, gross.reason)
 
-    drift = sess.run_drift()                      # Stage 3: the drift between and around anchors
-    print(drift.accepted.sum(), "of", drift.accepted.size, "windows accepted")
+        anchor = sess.run_fine(t_roi)                 # Stage 2: at t_roi (reference-clock uUTC)
+        print(anchor.offset_s, anchor.confidence)     # call again at other places for more anchors
 
-    sess.result().save("pair.coreg.json")
+        drift = sess.run_drift()                      # Stage 3: the drift between and around anchors
+        print(drift.accepted.sum(), "of", drift.accepted.size, "windows accepted")
+
+        sess.result().save("pair.coreg.json")
+
+
+if __name__ == "__main__":   # required: the loaders run in worker processes that re-import this script
+    main()
 ```
 
 The offset is always `t_moving - t_reference`, in seconds. Pick `t_roi`
@@ -53,7 +59,11 @@ What each number means, and the rule each stage decides by, is in
 [Methods](../methods.md). Before relying on the result, look at it:
 [Review a coregistration](review_report.md).
 
-`CoregSession()` loads the full-length alignment signals in worker processes;
-`CoregSession(background=False)` loads in the calling process, which is
-simpler in scripts and tests. A complete runnable version on synthetic data is
+`CoregSession()` loads the full-length alignment signals in worker
+processes, started with "spawn" on every platform: each one re-imports your
+script, so a script must keep its work under `if __name__ == "__main__":` (in
+a notebook or an interactive session this is not needed).
+`CoregSession(background=False)` loads in the calling process instead, with
+no worker processes and no guard needed; that is simpler in scripts and
+tests, at the cost of loading the two files one after the other. A complete runnable version on synthetic data is
 [`01_align_synthetic_pair.py`](https://github.com/bnelair/mef3io-coregistration/blob/main/examples/01_align_synthetic_pair.py).

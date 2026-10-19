@@ -1,7 +1,7 @@
 """Review a saved coregistration with plots — from the whole recording down to single samples.
 
     sigcoreg-review result.json
-    sigcoreg-review result.json --channel LTP1-LTP3 --out review/ --file-a /new/a.mefd
+    sigcoreg-review result.json --channel ch1-ch2 --out review/ --file-a /new/a.mefd
 
 Writes PNG figures and an ``index.html`` that shows them with the numbers behind them:
 
@@ -67,7 +67,7 @@ class Setup:
 
 
 def _parse_label(label: str, channels: list[str]) -> tuple[tuple, float]:
-    """A result's stage-channel label ("LTP1-LTP3", "-(LTP1-LTP3)", "LA1") → (spec, sign)."""
+    """A result's stage-channel label ("ch1-ch2", "-(ch1-ch2)", "LA1") → (spec, sign)."""
     sign = 1.0
     m = re.fullmatch(r"-\((.*)\)", label.strip())
     if m:
@@ -255,7 +255,7 @@ def fig_overview(s: Setup, out: Path) -> tuple[str, str]:
     fig.tight_layout()
     return _save(fig, out, "1_overview"), (
         "The reference recording end to end, the moving recording's span inside it, and the overlap "
-        "with both signals drawn on the reference clock. Large deflections are stimulation artifact.")
+        "with both signals drawn on the reference clock. Large deflections are often artifact (e.g. stimulation).")
 
 
 def fig_clock_map(s: Setup, out: Path) -> tuple[str, str]:
@@ -602,7 +602,7 @@ def build(result_path: Path, out: Path, channel: str | None,
     out : pathlib.Path
         The folder to write into (created if missing).
     channel : str or None
-        The channel to review, e.g. ``"LTP1-LTP3"``; ``None`` uses the channels Stage 2 aligned on.
+        The channel to review, e.g. ``"ch1-ch2"``; ``None`` uses the channels Stage 2 aligned on.
     file_a, file_b : str or pathlib.Path, optional
         Where the recordings are now, if they have moved (checked by time span, as when opening
         a result).
@@ -701,8 +701,8 @@ def build(result_path: Path, out: Path, channel: str | None,
 {''.join(f'<h2 id="f{i}">{e(t)}</h2><figure><img src="{e(img)}" alt="{e(t)}"><figcaption>{e(cap)}</figcaption></figure>' for i, (t, img, cap) in enumerate(figs))}
 </main></body></html>"""
     index = out / "index.html"
-    index.write_text(page)
-    (out / "summary.json").write_text(json.dumps(dict(summary), indent=2))
+    index.write_text(page, encoding="utf-8")
+    (out / "summary.json").write_text(json.dumps(dict(summary), indent=2), encoding="utf-8")
     rd.close()
     return index
 
@@ -719,7 +719,7 @@ def main(argv: list[str] | None = None) -> None:
     """
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("result", type=Path, help="saved coregistration result (.json)")
-    ap.add_argument("--channel", help='review channel, e.g. "LTP1-LTP3" (default: the Fine stage channels)')
+    ap.add_argument("--channel", help='review channel, e.g. "ch1-ch2" (default: the Fine stage channels)')
     ap.add_argument("--out", type=Path, help="output folder (default: <result>_review next to it)")
     ap.add_argument("--file-a", help="file A's path now (if the recordings have moved)")
     ap.add_argument("--file-b", help="file B's path now")

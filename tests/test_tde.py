@@ -1,4 +1,4 @@
-"""Tests for time-delay primitives (Milestone M4 → shared by R5/R6).
+"""Tests for time-delay primitives (shared by Stages 1, 2 and 3).
 
 Sign convention (``b[n] ≈ a[n - d]`` → ``d``), sub-sample accuracy, confidence, bounded
 search, and — the property that drove the design — robustness of normalized cross-correlation
@@ -35,7 +35,7 @@ def test_integer_shift_sign_and_confidence(estimator, shift):
 
 
 def test_confidence_is_distinctiveness_not_match_height():
-    """`confidence` must answer "did I lock on?", not "how similar are these?" (REVIEW B2).
+    """`confidence` must answer "did I lock on?", not "how similar are these?".
 
     A signal correlated against itself plus heavy independent noise still has ONE unambiguous
     peak, so it must stay confident even though the raw NCC has collapsed. The old metric was

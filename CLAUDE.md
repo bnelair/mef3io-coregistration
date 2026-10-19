@@ -1,8 +1,8 @@
 # mef3io-coregistration — assistant context
 
 Pure-Python engine for **coregistering two MEF 3.0 recordings captured on
-independent, drifting clocks** (e.g. a clinical Natus system and an implanted
-or research Cadence system), and for reading them through the saved result as
+independent, drifting clocks** (e.g. a clinical EEG system and a second,
+implanted or research recorder), and for reading them through the saved result as
 one recording on the reference clock. Depends on numpy, scipy and
 [mef3io](https://github.com/bnelair/mef3io) only (matplotlib for the `report`
 extra). All MEF 3.0 access goes through mef3io's public API — never parse MEF
@@ -30,8 +30,11 @@ python -m build && twine check dist/*         # sdist + wheel (wheel = package +
 mkdocs build --strict                         # docs; tooling from the [docs] extra, in its own venv
 ```
 
-`SIGCOREG_DATA_DIR` sets where cached synthetic fixtures go (default
-`./data/` next to the package, gitignored; `config.DATA_DIR`). The
+`SIGCOREG_DATA_DIR` sets where cached synthetic fixtures go (default: `./data/`
+in a source checkout, gitignored; the user cache folder for an installed
+package; `config.DATA_DIR`, pinned by `tests/test_config.py`).
+`CoregSession()` loads in "spawn" worker processes: scripts need an
+`if __name__ == "__main__":` guard, or `CoregSession(background=False)`. The
 `shared_data_dir` fixture (tests/conftest.py) reuses them across runs; they
 regenerate when the harness version or profile changes.
 
@@ -131,14 +134,19 @@ NEVER imports `align`, `session`, `synthetic` or `review`.
   not hung (`test_loader.py`).
 - End to end: a synthetic drift is recovered to < 1 sample RMS and the
   result drives the reader (`test_coreg_session.py::test_end_to_end_recovers_drift_and_reader_reconstructs`);
-  `examples/01_align_synthetic_pair.py` runs and the review report renders on
-  its result (`test_examples.py`, slow).
+  `examples/01_align_synthetic_pair.py` runs, `02_read_coregistered_recording.py`
+  runs on a synthetic two-channel result, and the review report renders on
+  01's result (`test_examples.py`, slow).
+- Text I/O is always `encoding="utf-8"`, and saved JSON is written with
+  `newline="\n"`, so results are byte-identical on Windows.
 
 ## Docs, examples, distribution
 
 `examples/` = `NN_snake_case.py` listed in examples/README.md (01 =
-self-contained synthetic end to end, smoke-run by `tests/test_examples.py`;
-02/03 need a user's result and are only compiled). Docs site: MkDocs Material
+self-contained synthetic end to end; 02 = every read path, run in the tests on
+a synthetic result; 03 = review report; all smoke-tested by
+`tests/test_examples.py`). `benchmarks/bench_day_long.py` = stage timings on a
+day-long synthetic pair. Docs site: MkDocs Material
 from `docs/` (`mkdocs.yml` holds the nav: getting started, how-to, guides
 (methods, result format), API reference, release notes, development),
 deployed to GitHub Pages by `.github/workflows/docs.yml` on push to main —
@@ -156,7 +164,8 @@ manually run the `bump-version` workflow on main (patch/minor/major or an
 explicit version) → commits VERSION as "Release vX.Y.Z", tags vX.Y.Z,
 dispatches `release.yml` → `python -m build`, twine check, the suite against
 the installed wheel, twine upload with the `PYPI_Token_General` secret, GitHub
-release with `docs/release_notes/X.Y.Z.md` as its text. A release.yml dispatch
+release with `docs/release_notes/X.Y.Z.md` as its text (refused while that
+page still has its `*Draft` line). A release.yml dispatch
 on a branch is a dry run. `ci.yml` = ruff + pytest matrix (ubuntu
 3.11/3.12/3.13, macOS 3.13, windows 3.13) + version sanity + 3.14 smoke on
 push (main, dev) and PRs. Before every release, a full docs revision PR
@@ -165,10 +174,14 @@ releases. Published on PyPI as `mef3io-coregistration`. requires-python stays
 >= 3.11 (datetime.UTC).
 
 Public text: `tests/test_public_text.py` (and the docs workflow's check of the
-built site) fails if README, docs, examples, the package, benchmarks, the
-workflows or the root files name any of the private product names it holds
-(base64-encoded there — never spell them out anywhere in this repo, this file
-included). The JSON format ids `signal_coregistration.*` are identifiers, not
+built site) scans EVERY tracked text file, tests and this file included, and
+fails on any of the private product names it holds (base64-encoded there —
+never spell them out anywhere in this repo), on recording-device vendor names,
+and on the channel labels of the real dataset the thresholds were calibrated
+on. Describe real-data results generically ("on a clinical test pair ..."),
+without the pair's measurements; use `ch1`/`ch2`, `subject01`, `recording_a`
+in examples. Requirement/review numbering of the private project (R-numbers,
+review ids) does not belong in public code or comments either. The JSON format ids `signal_coregistration.*` are identifiers, not
 product names, and are allowed; the old private import name appears once, in
 the 0.3.0 release note's upgrading line, and nowhere else. Institution
 mentions allowed: the affiliation line ("Maintained by Filip Mivalt,

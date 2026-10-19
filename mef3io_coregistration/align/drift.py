@@ -4,14 +4,14 @@ Seeded sliding-window cross-correlation across the full length. Every Stage 2 an
 truth for its neighbourhood: each window belongs to its nearest anchor, and each anchor's windows
 are walked **outward from it**. A window's search is narrow (``max_residual_s``) around a
 prediction from the recent confident estimates — last value plus local slope — so it locks onto
-the *nearby* peak and does not track-jump (R6.1). A peak on the search boundary is rejected: the
+the *nearby* peak and does not track-jump. A peak on the search boundary is rejected: the
 true peak lies outside the search. (Walking from the start of the span with the anchor's offset
 as the seed broke down whenever the anchor sat far from the start: with realistic drift the seed
 was already off by more than the search range at the first window, the walk locked onto a side
 peak and followed it — a constant 0.5–1 s error with nearly every window "accepted".) Each window keeps its peak height as a confidence weight; low-
-confidence windows are dropped from the fit and do not advance the seed (R6.2). A weighted
+confidence windows are dropped from the fit and do not advance the seed. A weighted
 smoothing spline through the surviving ``(t_i, offset_i)`` gives a continuous ``offset(t)``,
-sampled to the monotone ``(x_ref, y_moving)`` clock map (R6.3, R6.4). The smooth-drift
+sampled to the monotone ``(x_ref, y_moving)`` clock map. The smooth-drift
 assumption (no clock jumps within a session) is a documented assumption.
 """
 from __future__ import annotations
@@ -42,12 +42,12 @@ from .tde import normxcorr_delay, parabolic_peak, peak_quality
 
 @dataclass(frozen=True)
 class DriftEstimate:
-    """Stage 3 output: the clock map plus per-window QC arrays (R6.2, R12).
+    """Stage 3 output: the clock map plus per-window QC arrays.
 
     Every array is finite — a window that could not be estimated (gap, no lock) is marked
     ``rejected`` and carries its seeded offset, never ``NaN``. NaN used to reach the API and
-    serialise as the bare token ``NaN``, which is not valid JSON and killed the drift panel in
-    the browser with a parse error that mentioned neither gaps nor drift (REVIEW B3).
+    serialise as the bare token ``NaN``, which is not valid JSON, and a front end reading the
+    result would fail with a parse error that mentions neither gaps nor drift.
     """
 
     clock_map: ClockMap
@@ -78,7 +78,7 @@ def estimate_drift(
     smoothing: float | None = None,
     filters: FilterSpec | None = None,
 ) -> DriftEstimate:
-    """Estimate ``offset(t)`` over the anchored span and return a clock map (R6).
+    """Estimate ``offset(t)`` over the anchored span and return a clock map.
 
     ``ref``/``mov`` are harmonized traces at the same Fs. ``anchor`` is one or more Stage 2
     anchors; every window belongs to its nearest anchor and is reached by walking outward from
@@ -148,7 +148,7 @@ def estimate_drift(
                         used = j
                         break
                     # A rejected window still needs a finite offset: carry the prediction, so
-                    # the arrays the UI plots are always plottable.
+                    # the arrays a front end plots are always plottable.
                     offsets[i] = predicted[j]
                     if gap:
                         gapped[i] = True
@@ -158,7 +158,7 @@ def estimate_drift(
                     offsets[i], confid[i] = off, conf
                     # Advance the seed only from confident windows that land where the walk
                     # expected: true drift moves the offset by milliseconds per step, so a
-                    # confident window far from the prediction is a spurious peak (R6.2).
+                    # confident window far from the prediction is a spurious peak.
                     if conf >= min_confidence and abs(off - predicted[j]) <= tol:
                         history.append((int(centers[i]), float(off)))
                 size = min(_BLOCK, size * 2) if used == block.size else max(1, size // 2)
@@ -166,7 +166,7 @@ def estimate_drift(
 
     # Robust outlier rejection against a local median. The seeded chain can, in principle, walk
     # off: a window that locks onto the wrong peak advances the seed, and its neighbours follow
-    # it. Drift is smooth by assumption (R6.5), so a window that disagrees with its neighbours
+    # it. Drift is smooth by assumption, so a window that disagrees with its neighbours
     # is wrong no matter how confident it is — and rejecting it costs nothing, because a smooth
     # curve is well determined by the windows that remain.
     outlier, scatter_s = _local_outliers(offsets, gapped, fs)
@@ -185,8 +185,8 @@ def estimate_drift(
     smoothed = _extend(centers, smoothed, accepted, end_slopes)
 
     # Map anchors come from ACCEPTED windows only. Building them from every window centre —
-    # including the ~65% this dataset rejects — and then reporting the full span as "measured"
-    # is extrapolation dressed up as measurement (REVIEW B5).
+    # including the many a real recording rejects — and then reporting the full span as "measured"
+    # is extrapolation dressed up as measurement.
     ok_centers = centers[accepted]
     ok_offsets = smoothed[accepted]
     measured_span = (int(ok_centers[0]), int(ok_centers[-1]))
@@ -430,7 +430,7 @@ def _admission_tol(history: list[tuple[int, float]], fs: float, max_residual_s: 
 def _anchor_residuals(
     centers: np.ndarray, smoothed: np.ndarray, accepted: np.ndarray, anchors: Sequence[Anchor]
 ) -> np.ndarray:
-    """Fitted map minus each anchor's own offset (s) — an independent consistency check (R12.1).
+    """Fitted map minus each anchor's own offset (s) — an independent consistency check.
 
     The anchors seed the walk but are not in the fit, so a wrong anchor shows up here instead of
     bending the map. Evaluated on the fitted curve (held flat beyond the measured span).
@@ -526,7 +526,7 @@ def _fit_offset(
     cubically, which diverges fast: beyond the last accepted window a cubic will happily invent
     a multi-second offset. Outside the measured span the caller continues the curve with the
     fitted end slopes (:func:`_end_offset_slopes`, as the map does) and marks that region
-    extrapolated rather than pretending it was measured (REVIEW B5).
+    extrapolated rather than pretending it was measured.
     """
     t0 = int(centers[0])
     x_all = (centers - t0).astype(np.float64) / US_PER_S

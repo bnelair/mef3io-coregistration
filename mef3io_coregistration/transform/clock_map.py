@@ -179,7 +179,7 @@ class ClockMap:
     def save(self, path: str | Path) -> Path:
         """Persist the map as JSON (integer anchors → bit-stable reload)."""
         path = Path(path)
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True))
+        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8", newline="\n")
         return path
 
     @classmethod
@@ -198,7 +198,7 @@ class ClockMap:
     @classmethod
     def load(cls, path: str | Path) -> ClockMap:
         """Read a map saved with :meth:`save`."""
-        return cls.from_dict(json.loads(Path(path).read_text()))
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
 def _interp_extrap(

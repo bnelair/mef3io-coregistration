@@ -1,7 +1,7 @@
 """Tests for Stage 3 — continuous drift estimation.
 
-R6.1 seeded sliding-window search; R6.2 per-window confidence weights, low-confidence
-windows dropped; R6.3 weighted smoothing spline → offset(t); R6.4 non-monotonic offset yields
+Covers: seeded sliding-window search; per-window confidence weights, low-confidence
+windows dropped; weighted smoothing spline → offset(t); non-monotonic offset yields
 a monotone map. Accept: recovered offset(t) RMS < 1 lower-Fs sample over the anchored span.
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ from mef3io_coregistration.config import US_PER_S
 from mef3io_coregistration.synthetic.warp import WarpSpec
 
 # Physical drift rates (|d offset/dt| ~ 1e-4). A swing amplitude of 0.07 s over a 1200 s period
-# reproduces the ±5 s / 24 h *rate* in a fast-to-render span, and is non-monotonic (R6.4).
+# reproduces the ±5 s / 24 h *rate* in a fast-to-render span, and is non-monotonic.
 _LINEAR = WarpSpec("linear", offset0_s=120.0, rate_s_per_s=5.0 / (12 * 3600))
 _SWING = WarpSpec("swing", offset0_s=120.0, swing_amp_s=0.07, swing_period_s=1200.0)
 
@@ -41,7 +41,7 @@ def test_recovers_linear_drift_under_one_sample():
 
 def test_recovers_swing_with_monotone_map():
     """A non-monotonic offset (swings up then down) still yields a strictly monotone map
-    (R6.4), recovered within 1 sample RMS."""
+, recovered within 1 sample RMS."""
     pair = build_pair(_SWING)
     drift, gt, rms = _run(pair, _SWING)
     d = np.diff(gt)
@@ -88,7 +88,7 @@ def test_refit_never_keeps_a_gap_window_and_needs_two():
 
 def test_low_confidence_windows_are_dropped_and_span_still_recovered():
     """A dead/low-SNR span loses shared structure; those windows fall below min_confidence,
-    are excluded from the fit (R6.2), and the rest of the span is still recovered."""
+    are excluded from the fit, and the rest of the span is still recovered."""
     pair = build_pair(_LINEAR)
     pair.mov_dec = corrupt_segment(pair.mov_dec, 500.0, 650.0)  # noise over [500, 650] s
     drift, gt, _rms = _run(pair, _LINEAR)

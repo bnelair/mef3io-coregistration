@@ -171,7 +171,7 @@ def test_string_specs_resolve_against_each_file(rec_files):
 
 
 def test_display_buckets_follow_preference_zoomed_out_and_in(rec_files):
-    """Viewer buckets (R10.3): zoomed out from cached envelopes, zoomed in from exact data —
+    """Viewer buckets: zoomed out from cached envelopes, zoomed in from exact data —
     both honour the preferred source with fallback, and never exceed ``max_points``."""
     res_path, _ = rec_files
     with CoregisteredRecording.open(res_path) as rec:

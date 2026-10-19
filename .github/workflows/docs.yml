@@ -3,6 +3,7 @@ name: docs
 on:
   push:
     branches: [main]
+  pull_request:  # build and check only; deploy runs for main
   workflow_dispatch:
 
 permissions:
@@ -32,12 +33,13 @@ jobs:
         run: pip install "mkdocs-material>=9,<10" "mkdocs>=1.6,<2" "mkdocstrings[python]>=0.24"
       - name: Build site (mkdocs + mkdocstrings)
         run: mkdocs build --strict
-      - name: Check the built site names no private product
-        # Same list as tests/test_public_text.py, encoded so this file
-        # does not spell it out; covers the generated API reference too.
+      - name: Check the built site names no private product or device
+        # Same lists as tests/test_public_text.py (private product names,
+        # recording-device names and dataset channel labels), encoded so this
+        # file does not spell them out; covers the generated API reference too.
         run: |
           test -d site
-          pattern="$(echo 'Ym5lbFtfLV1zaWduYWxbXy1dY29yZWdpc3RyYXRpb258c2lnbmFsX2NvcmVnaXN0cmF0aW9uX2FwcA==' | base64 -d)"
+          pattern="$(echo 'Ym5lbFtfLV1zaWduYWxbXy1dY29yZWdpc3RyYXRpb258c2lnbmFsX2NvcmVnaXN0cmF0aW9uX2FwcHxuYXR1c3xjYWRlbmNlfFxiTFRQWzAtOV18XGJMRFswLTld' | base64 -d)"
           rc=0; grep -rIilE -- "$pattern" site || rc=$?
           if [ "$rc" -ne 1 ]; then
             echo "::error::private product name found in the built site (files above), or grep failed (rc=$rc)"
@@ -48,6 +50,9 @@ jobs:
           path: site
 
   deploy:
+    # Only main is published: a pull request or a dispatch from another
+    # branch builds and checks the site but never deploys it.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: build
     runs-on: ubuntu-latest
     environment:

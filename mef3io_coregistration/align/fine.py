@@ -2,7 +2,7 @@
 
 Normalized cross-correlation within a user ROI on the band-limited decimated signal, seeded
 by the gross offset, with sub-sample refinement. Emits a single anchor ``(t_ref, t_moving)`` +
-confidence (R5.2); call it at several ROIs to accumulate anchors (R5.3). Reference and moving
+confidence; call it at several ROIs to accumulate anchors. Reference and moving
 traces must be at the same (harmonized) target Fs — the lower channel's Fs by default.
 
 Windows are cut by integer sample slicing (no interpolation, which would distort near-Nyquist
@@ -45,7 +45,7 @@ class Trace(Protocol):
 
 
 class GappyWindow(ValueError):
-    """The requested window overlaps too much recording gap to align on (R1.3, REVIEW B3)."""
+    """The requested window overlaps too much recording gap to align on."""
 
 
 def estimate_anchor(
@@ -58,7 +58,7 @@ def estimate_anchor(
     max_gap_fraction: float = DRIFT_MAX_GAP_FRACTION,
     filters: FilterSpec | None = None,
 ) -> Anchor:
-    """Refine the offset at an ROI, seeded by ``seed_offset_s``, into an anchor (R5.1, R5.2).
+    """Refine the offset at an ROI, seeded by ``seed_offset_s``, into an anchor.
 
     A window of half-width ``half_window_s`` is cut from the reference at ``roi_center_uutc``
     and from the moving trace at the seeded position ``roi_center + seed_offset``; both are
@@ -67,7 +67,7 @@ def estimate_anchor(
     offset is ``seed + residual``.
 
     Raises :class:`GappyWindow` if either window is mostly recording gap — better to say so
-    than to correlate against interpolated zeros and return a confident number (REVIEW B3).
+    than to correlate against interpolated zeros and return a confident number.
     """
     if abs(ref.fs - mov.fs) > 1e-6:
         raise ValueError("reference and moving traces must be harmonized to the same Fs")

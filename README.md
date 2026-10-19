@@ -49,7 +49,7 @@ Align two recordings and save the result:
 ```python
 from mef3io_coregistration.session import CoregSession
 
-with CoregSession() as sess:
+with CoregSession(background=False) as sess:   # load in this process (no worker processes)
     sess.open("system_a.mefd", "system_b.mefd", reference="A")
     sess.set_channels("gross", "C3")          # the channel to align on, in both files
     sess.set_channels("fine", "C3")
@@ -85,6 +85,10 @@ with CoregisteredRecording.open("pair.coreg.json") as rec:
 ```
 
 Times are microseconds since the Unix epoch (uUTC), as MEF 3.0 stores them.
+`CoregSession()` without `background=False` loads both files in parallel worker
+processes; a script using it must keep its code under
+`if __name__ == "__main__":`
+([how-to](https://bnelair.github.io/mef3io-coregistration/howto/align_python/)).
 More: a runnable
 [end-to-end example](https://github.com/bnelair/mef3io-coregistration/blob/main/examples/01_align_synthetic_pair.py)
 that needs no data of your own, the

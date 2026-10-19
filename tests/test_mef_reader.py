@@ -1,6 +1,6 @@
 """Tests for the MEF3 IO wrapper.
 
-R1.1 read == the legacy mef_tools API (mef3io.compat.MefReader); R1.2 per-channel Fs (incl. differing rates); R1.3 gaps surfaced
+Covers: read == the legacy mef_tools API (mef3io.compat.MefReader); per-channel Fs (incl. differing rates); gaps surfaced
 as NaN and reported, never silently filled.
 """
 from __future__ import annotations
@@ -17,7 +17,7 @@ _EPOCH = 1_700_000_000 * US_PER_S
 
 
 # --------------------------------------------------------------------------- #
-# R1.1 — read matches the legacy mef_tools API (mef3io.compat)
+# read matches the legacy mef_tools API (mef3io.compat)
 # --------------------------------------------------------------------------- #
 def test_full_read_matches_legacy_mef_tools_api(shared_data_dir):
     """A full-channel read returns byte-identical samples to mef3io.compat.MefReader (the mef_tools API), with timestamps
@@ -65,10 +65,10 @@ def test_windowed_read_grid_aligned(shared_data_dir):
 
 
 # --------------------------------------------------------------------------- #
-# R1.2 — per-channel sampling rate (differing rates)
+# per-channel sampling rate (differing rates)
 # --------------------------------------------------------------------------- #
 def test_per_channel_fs_differs(write_mef):
-    """Two channels in one file may carry different sampling rates (R1.2)."""
+    """Two channels in one file may carry different sampling rates."""
     n_hi, n_lo = 4096, 1024
     path = write_mef(
         "mixed.mefd",
@@ -86,7 +86,7 @@ def test_per_channel_fs_differs(write_mef):
 
 
 # --------------------------------------------------------------------------- #
-# R1.3 — gaps surfaced, never silently filled
+# gaps surfaced, never silently filled
 # --------------------------------------------------------------------------- #
 def test_gap_is_reported_and_not_filled(write_mef):
     """A 2 s discontinuity between two 5 s segments is reported by ``gaps`` and appears as

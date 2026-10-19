@@ -45,12 +45,15 @@ class CoregResult:
     moving_file: str
     stage_channels: dict = field(default_factory=dict)  # {stage: {"reference": lbl, "moving": lbl}}
     anchors: list[Anchor] = field(default_factory=list)
-    drift: dict | None = None  # {window_s, grid_s, t_ref_uutc[], offset_s[], confidence[], accepted[]}
+    # {window_s, grid_s, t_ref_uutc[], offset_s[], smoothed_offset_s[], confidence[], accepted[],
+    #  gapped[], measured_span_uutc}
+    drift: dict | None = None
     created_utc: str = ""
     tool_version: str = __version__
     reference_role: str = "A"  # which of file A / file B is the reference
-    stage_filters: dict = field(default_factory=dict)  # {stage: {"reference": [..], "moving": [..]}}
-    qc: dict | None = None  # QC report: verification, residuals, extrapolation
+    # {"gross": filters, "fine": [{"t_ref_uutc": t, "filters": filters}, ...], "drift": filters}
+    stage_filters: dict = field(default_factory=dict)
+    qc: dict | None = None  # QC report: map_verified, verification, stage1_accepted_by, ...
     file_fingerprints: dict = field(default_factory=dict)  # {"A": fingerprint, "B": fingerprint}
 
     def __post_init__(self) -> None:
@@ -102,7 +105,7 @@ class CoregResult:
     def save(self, path: str | Path) -> Path:
         """Write the result as sorted-key JSON; returns ``path``. Re-saving is byte-stable."""
         path = Path(path)
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True))
+        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8", newline="\n")
         return path
 
     @classmethod
@@ -137,4 +140,4 @@ class CoregResult:
     @classmethod
     def load(cls, path: str | Path) -> CoregResult:
         """Read a result saved with :meth:`save` (any earlier format version too)."""
-        return cls.from_dict(json.loads(Path(path).read_text()))
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))

@@ -1,27 +1,26 @@
 """Stage 1 — gross alignment.
 
-Recovers a coarse global offset that can be **minutes to hours** (the isolated, no-DST cadence
-clock), by matched-filtering several independent templates from the shorter recording into the
+Recovers a coarse global offset that can be **minutes to hours** (e.g. a second recorder whose
+clock is set by hand and ignores daylight saving time), by matched-filtering several independent templates from the shorter recording into the
 longer one and requiring them to **agree**.
 
 Why not the min-max envelope, as originally designed? Because the envelope is not a shared
 physical quantity. It is computed from each file's *raw* signal at that file's native rate, so
-a 20 ms bin of an 8 kHz cadence channel summarises 4 kHz of bandwidth while the same bin of a
-256 Hz natus channel summarises 128 Hz. On the reference dataset the median bin range is
-1246 uV against 49 uV. Correlating those two features produces a flat surface whose argmax sits
-**2.96 hours** from the truth, with the correlation at the *true* offset only 10–53 % of the
-spurious maximum. No amount of whitening or tuning rescues it: there is no peak to find. The
-min-max envelope remains what R2.3 says it is — a display product, not time-accurate, not an
+a 20 ms bin of a kHz-rate channel summarises far more bandwidth than the same bin of a 256 Hz
+channel, and the two bin ranges differ by more than an order of magnitude. On a clinical test
+pair, correlating those two features produced a flat surface whose argmax sat hours from the
+truth, with the correlation at the *true* offset well below the spurious maximum. No amount of whitening or tuning rescues it: there is no peak to find. The
+min-max envelope remains what it was designed as — a display product, not time-accurate, not an
 alignment feature.
 
-The band-limited **decimated waveform** does lock, cheaply: a 5-minute cadence template at
-256 Hz matches into the 24 h natus trace with NCC 0.43–0.52 against a 0.25 background, from
-four independent starting points, agreeing to within 0.12 s.
+The band-limited **decimated waveform** does lock, cheaply: on the same pair, templates of a few
+minutes from the shorter recording matched into the day-long one clearly above the background,
+from four independent starting points, agreeing to within a fraction of a second.
 
 **Consensus is the confidence.** One template's argmax is a guess; four templates drawn from
 different hours of the recording landing on the same offset is a measurement. If they disagree,
 the estimate is reported as **not locked** — and a stage that has not locked must never be
-marked done (REVIEW B1: the old code reported confidence 0.000, drew it in a stat box, and let
+marked done (an earlier version reported confidence 0.000, showed it, and let
 the user build Stage 2 on top of it).
 """
 from __future__ import annotations
@@ -73,7 +72,7 @@ class GrossOffset:
     """Coarse global offset ``t_moving - t_ref`` (seconds), with an explicit lock verdict.
 
     ``locked`` is the field that matters. When it is False the offset is a guess, and the later
-    stages will not build on it until someone accepts it (R4, REVIEW B1). ``accepted_by`` says
+    stages will not build on it until someone accepts it. ``accepted_by`` says
     who did: ``"templates"`` (they agreed), ``"hand"`` (a hand placement the shared signal
     supports) or ``"user"`` (accepted without that support — recorded, and reported in QC).
     """
@@ -99,7 +98,7 @@ def estimate_gross_offset(
     min_snr: float = GROSS_MIN_SNR,
     guard_s: float = PEAK_GUARD_S,
 ) -> GrossOffset:
-    """Estimate the coarse offset by multi-template consensus (R4.1, R4.2).
+    """Estimate the coarse offset by multi-template consensus.
 
     ``ref`` and ``mov`` are harmonized decimated traces (same Fs) with absolute ``start_uutc``.
     Templates are drawn from whichever recording is **shorter** — a template from the long file
@@ -220,7 +219,7 @@ def estimate_gross_offset(
 
 @dataclass(frozen=True)
 class OffsetVerification:
-    """Does the shared signal actually support THIS offset? (REVIEW-2 N1)
+    """Does the shared signal actually support THIS offset?
 
     Distinct from :class:`GrossOffset`, which asks "where is the best offset?". This asks the
     question every later stage silently assumed the answer to: *is the offset I was handed
@@ -229,8 +228,8 @@ class OffsetVerification:
     The distinctiveness confidence used by Stages 2 and 3 cannot answer it. That statistic is
     computed on a correlation surface only ±0.25 s wide, so it measures whether the peak is
     sharp within a quarter-second of wherever it was pointed — not whether it was pointed in the
-    right place. Measured on the reference pair, it is *higher* at every wrong offset than at the
-    true one (0.83 median across 60 random offsets, versus 0.66 at the truth): at a wrong offset
+    right place. Measured on a clinical test pair, it was *higher* at wrong offsets than at the
+    true one: at a wrong offset
     two unrelated traces throw up one random dominant blip, which is very "distinct", while the
     true offset has a broad genuine ridge that is less distinct against its own shoulders.
 
@@ -262,7 +261,7 @@ def verify_offset(
     template_s: float = GROSS_TEMPLATE_S,
     tol_s: float = GROSS_CONSENSUS_S,
 ) -> OffsetVerification:
-    """Check whether the shared signal supports ``offset_s`` (R12, REVIEW-2 N1).
+    """Check whether the shared signal supports ``offset_s``.
 
     Cuts the same independent templates as Stage 1, but instead of taking each surface's argmax
     it reads the surface **at the offset in question** (allowing ±``tol_s`` of slack for drift)
@@ -337,7 +336,7 @@ def verify_offset(
         # Two statistics were tried here first and both lie, for the same underlying reason —
         # they are absolute, and the surfaces they are measured on are not comparable across
         # datasets:
-        #   * Height above background. The true offset stands 14σ clear on the real pair, but
+        #   * Height above background. The true offset stands well clear on a clinical test pair, but
         #     barely 1σ on the synthetic pair, whose source is so self-similar that the entire
         #     surface is elevated — while an hour-wrong offset still reaches 6σ. No threshold
         #     separates those.
@@ -553,7 +552,7 @@ class _Detect:
 
 
 def _at_detection_rate(tr: Trace) -> Trace:
-    """The trace at the rate the DETECTION band needs (R10.1).
+    """The trace at the rate the DETECTION band needs.
 
     Stage 1 correlates the detection band (≤ ``LOWPASS_HZ``), so anything beyond a few times
     that edge is oversampling: at 256 Hz the matched filter ran 16× more samples than the band
@@ -596,7 +595,7 @@ def _at_detection_rate(tr: Trace) -> Trace:
 
 
 def _prepare(long_data: np.ndarray, m: int) -> tuple[np.ndarray, int]:
-    """One rFFT of the long trace, reused by every template (R10.1 interactive budget)."""
+    """One rFFT of the long trace, reused by every template (the interactive time budget)."""
     nfft = next_fast_len(long_data.shape[0] + m - 1)
     return rfft(long_data, nfft, workers=-1), nfft
 

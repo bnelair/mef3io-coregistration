@@ -33,12 +33,14 @@ release:
 - [ ] the release notes: draft what changed and what an upgrading user must
       do in `docs/release_notes/X.Y.Z.md`, and add it to the release-notes
       index and the `mkdocs.yml` nav (newest first). Between releases, pull
-      requests collect their notes in `docs/release_notes/unreleased.md`
-      (listed in the index and the nav as "Unreleased"); the revision renames
-      it to `X.Y.Z.md`, rewrites it for the reader (highlights, fixes,
-      upgrading), changes its "Draft" line to `*Released YYYY-MM-DD.*` and
-      removes the "Unreleased" entries. The next pull request that needs a
-      note creates the file again. Links in these pages are absolute, so they
+      requests collect their notes in `docs/release_notes/unreleased.md`:
+      the first pull request after a release that needs a note creates it
+      (starting with a `*Draft.*` line) and adds it to the index and the
+      `mkdocs.yml` nav as "Unreleased". The revision renames it to `X.Y.Z.md`,
+      rewrites it for the reader (highlights, fixes, upgrading), replaces its
+      draft line with `*Released YYYY-MM-DD.*` and removes the "Unreleased"
+      entries. **The release workflow refuses to publish while the notes page
+      still starts a line with `*Draft`**, so this step cannot be skipped. Links in these pages are absolute, so they
       work on GitHub too: the release workflow uses
       `docs/release_notes/X.Y.Z.md` as the GitHub release text when it
       exists (GitHub's generated notes otherwise).
@@ -55,7 +57,8 @@ version equal to `VERSION` releases the current commit as it is. It commits
 the bumped `VERSION` as `Release vX.Y.Z`, tags, and dispatches the
 **release** workflow, which:
 
-1. checks that the tag matches `VERSION`;
+1. checks that the tag matches `VERSION` and that
+   `docs/release_notes/X.Y.Z.md` is no longer marked as a draft;
 2. builds the sdist and the wheel (`python -m build`) and checks them with
    `twine check`;
 3. installs the built wheel and runs the test suite against it;
@@ -75,5 +78,6 @@ and the tag to `main` itself.
 `ci.yml` runs on pushes to `main` and `dev` and on every pull request: ruff,
 the full pytest matrix (Ubuntu 3.11/3.12/3.13, macOS 3.13, Windows 3.13), a
 Python 3.14 smoke test, and the version-consistency check. The docs site
-(`docs.yml`) builds with `mkdocs build --strict`, checks the built site for
-private names, and deploys to GitHub Pages from `main`.
+(`docs.yml`) builds with `mkdocs build --strict` and checks the built site for
+private names, device names and dataset channel labels on every pull request
+and push to `main`; only `main` is deployed to GitHub Pages.

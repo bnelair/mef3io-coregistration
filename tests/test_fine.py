@@ -1,7 +1,7 @@
 """Tests for Stage 2 — fine alignment / anchor.
 
-R5.1 ROI GCC seeded by the gross offset with sub-sample refinement; R5.2 emit an anchor
-(t_ref, t_moving) + confidence; R5.3 repeatable at multiple ROIs. Accept: recovered anchor
+Covers: ROI GCC seeded by the gross offset with sub-sample refinement; emit an anchor
+(t_ref, t_moving) + confidence; repeatable at multiple ROIs. Accept: recovered anchor
 lag within 1 sample of the lower Fs of offset_gt at the ROI centre.
 """
 from __future__ import annotations
@@ -50,8 +50,8 @@ def test_multiple_rois_accumulate_independent_anchors():
 
 def test_rejects_a_window_that_is_mostly_gap():
     """A window over a recording gap must be refused, not correlated against interpolated
-    zeros (REVIEW B3). Previously one NaN sample made the lag NaN, which FastAPI serialised
-    as the bare token `NaN` — not valid JSON — and the browser's drift panel died on a parse
+    zeros. Previously one NaN sample made the lag NaN, which a JSON encoder writes
+    as the bare token `NaN` — not valid JSON — and a front end reading it died on a parse
     error that mentioned neither gaps nor drift."""
     pair = build_pair(_DRIFT)
     gappy = pair.mov_dec.data.copy()
@@ -73,8 +73,8 @@ def test_seed_is_what_the_caller_passes_not_a_stale_offset():
     """Stage 2 refines from the seed it is GIVEN, and its search cannot reach past its own
     seed's error.
 
-    This is the property the UI was violating: `Refine at ROI` sent no seed, so the backend fell
-    back to the stored Stage 1 offset. A user who dragged the traces into alignment and hit
+    This is the property an earlier front end violated: its refine request sent no seed, so the
+    engine fell back to the stored Stage 1 offset. A user who dragged the traces into alignment and hit
     Refine had that alignment silently ignored — the search started from the old automatic value
     and, being bounded, could not walk back to the truth. It returned a confidently wrong anchor
     seconds away. The fix is in the client (it now seeds from the offset on screen at the ROI);
@@ -131,7 +131,7 @@ def test_filters_travel_with_the_call():
 
 
 def test_roi_outside_a_recording_is_refused_not_silently_clamped():
-    """An ROI that does not fit inside BOTH recordings is refused (REVIEW: the -3588 s anchor).
+    """An ROI that does not fit inside BOTH recordings is refused (a real failure: an anchor 3588 s off).
 
     The two windows must sit at the same position relative to their own centres, because the
     caller reads the offset back out as `(b_start - a_start) + lag`. Slicing them independently

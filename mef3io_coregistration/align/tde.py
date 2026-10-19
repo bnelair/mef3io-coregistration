@@ -1,4 +1,4 @@
-"""Time-delay estimation primitives (Milestone M4).
+"""Time-delay estimation primitives.
 
 Cross-correlation with sub-sample peak refinement, shared by the gross (Stage 1), fine
 (Stage 2) and drift (Stage 3) stages. FFT-based and batchable.
@@ -8,7 +8,7 @@ Sign convention: :func:`gcc_phat` / :func:`normxcorr_delay` return the lag ``d``
 ``a``. With ``a = reference`` and ``b = moving`` this is the local offset ``t_moving - t_ref``
 in samples.
 
-**Confidence is peak distinctiveness, not correlation height** (REVIEW B2). The raw normalized
+**Confidence is peak distinctiveness, not correlation height**. The raw normalized
 cross-correlation of two windows *falls* as the window lengthens, because two different
 amplifiers accumulate more independent content — even though the lag estimate simultaneously
 gets much more reliable. Thresholding on raw NCC therefore rejects precisely the windows whose
@@ -25,7 +25,7 @@ The raw NCC is still reported as :attr:`Delay.ncc`, for information only.
 Inputs must be finite. Gap (``NaN``) samples are the caller's problem: condition the trace
 (which zeroes gaps and records a validity mask) and reject over-gappy windows *before*
 estimating, rather than letting a single NaN turn a lag into ``NaN`` and a JSON body into
-something the browser cannot parse (REVIEW B3).
+something a front end cannot parse.
 """
 from __future__ import annotations
 
@@ -137,7 +137,7 @@ def gcc_phat(
     max_lag_s: float | None = None,
     guard_s: float = PEAK_GUARD_S,
 ) -> Delay:
-    """Estimate the delay of ``b`` relative to ``a`` via GCC-PHAT (R5.1, R6.1).
+    """Estimate the delay of ``b`` relative to ``a`` via GCC-PHAT.
 
     The phase transform whitens the cross-spectrum, sharpening the peak. Kept for
     completeness and for narrow, seeded searches on band-limited traces; Stages 1–3 use
@@ -245,7 +245,7 @@ def normxcorr_surface(
     """The full normalized cross-correlation surface of ``b`` vs ``a`` over ±``max_lag_s``.
 
     Same math and sign convention as :func:`normxcorr_delay`, but returns the whole curve rather
-    than only its argmax — so the UI can show *why* a lag was chosen, and whether the peak is one
+    than only its argmax — so a front end can show *why* a lag was chosen, and whether the peak is one
     clear winner or one of several equal bumps.
     """
     a = _finite(a, "a")
@@ -280,7 +280,7 @@ def normxcorr_surface(
 
 
 def _finite(x: np.ndarray, name: str) -> np.ndarray:
-    """Reject non-finite input rather than quietly returning a NaN lag (REVIEW B3)."""
+    """Reject non-finite input rather than quietly returning a NaN lag."""
     arr = np.asarray(x, dtype=np.float64)
     if arr.size and not np.isfinite(arr).all():
         raise ValueError(

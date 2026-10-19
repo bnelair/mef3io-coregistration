@@ -22,5 +22,6 @@ python examples/01_align_synthetic_pair.py
 python examples/02_read_coregistered_recording.py path/to/result.coreg.json
 ```
 
-`01` runs in the test suite (`tests/test_examples.py`), and the review report
-is run on its result there too.
+All three run in the test suite (`tests/test_examples.py`): `01` as it is,
+`02` on a synthetic result whose recordings carry `ch1` and `ch2`, and the
+review report on `01`'s result.

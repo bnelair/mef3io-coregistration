@@ -1,7 +1,7 @@
 """Tests for the runtime reader and resampler.
 
-R8.2/R8.6 raw pulls byte-identical to the legacy mef_tools API (mef3io.compat) from both files; R8.3 coregistered moving
-resampled onto the reference grid; R8.4 reference never transformed; R8.5 reference-clock
+Covers: raw pulls byte-identical to the legacy mef_tools API (mef3io.compat) from both files; coregistered moving
+resampled onto the reference grid; reference never transformed; reference-clock
 query domain under coregistration. Validated end-to-end against the synthetic-warp harness.
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ def _reader(fx):
 
 
 # --------------------------------------------------------------------------- #
-# R8.2 / R8.6 — raw pulls from both files match the legacy mef_tools API
+# raw pulls from both files match the legacy mef_tools API
 # --------------------------------------------------------------------------- #
 def test_raw_pull_matches_legacy_api_both_files(shared_data_dir):
     from mef3io_coregistration.synthetic import build_or_load
@@ -47,7 +47,7 @@ def test_raw_pull_matches_legacy_api_both_files(shared_data_dir):
 
 
 # --------------------------------------------------------------------------- #
-# R8.4 — reference is never transformed
+# reference is never transformed
 # --------------------------------------------------------------------------- #
 def test_reference_never_transformed(shared_data_dir):
     """Reading the reference file returns native samples whether coregister is on or off."""
@@ -62,7 +62,7 @@ def test_reference_never_transformed(shared_data_dir):
 
 
 # --------------------------------------------------------------------------- #
-# R8.3 / R8.5 — coregistered moving onto the reference grid
+# coregistered moving onto the reference grid
 # --------------------------------------------------------------------------- #
 def test_coregistered_moving_reconstructs_reference(shared_data_dir):
     """The moving signal read coregistered reproduces the reference signal (they share the
@@ -89,12 +89,11 @@ def test_coregistered_moving_reconstructs_reference(shared_data_dir):
 
 def test_coregistered_read_of_a_moving_only_channel(tmp_path):
     """A coregistered read must work for channels that exist ONLY in the moving file — which is
-    the tool's whole purpose (REVIEW B4).
+    the tool's whole purpose.
 
-    On the reference dataset the clinical file has 209 channels and the cadence file 19; the
-    other 190 are the actual clinical montage, and both of the project's headline use cases
-    (stim localisation, artifact-cleaned overlay) live on them. The old reader built its output
-    grid by reading the requested channel from the *reference* file, so all 190 raised
+    Typically a clinical file carries many channels a second recorder does not, and much of the
+    analysis lives on them. An earlier reader built its output grid by reading the requested
+    channel from the *reference* file, so every such channel raised
     `TypeError: float() argument must be ... not 'NoneType'`, naming neither channel nor file.
     """
     from _synth import write_pair
@@ -117,7 +116,7 @@ def test_coregistered_read_of_a_moving_only_channel(tmp_path):
         coreg = r.get_data("clinical_only", t0, t1, file="B", coregister=True)
         assert coreg.n > 0
         assert coreg.fs == pytest.approx(256.0)  # the channel's OWN rate, not the reference's
-        assert coreg.ts[0] >= t0 and coreg.ts[-1] <= t1  # reference-clock domain (R8.5)
+        assert coreg.ts[0] >= t0 and coreg.ts[-1] <= t1  # reference-clock domain
 
         # it carries the same content as the shared channel, read the same way
         shared = r.get_data("eeg", t0, t1, file="B", coregister=True)
@@ -136,7 +135,7 @@ def test_coregistered_read_of_a_moving_only_channel(tmp_path):
 
 def test_coregistered_moving_timing_within_one_lower_fs_sample(shared_data_dir):
     """The coregistered moving signal aligns with the reference to within 1 lower-Fs sample
-    (the R8 acceptance for stim-pulse placement)."""
+    (the acceptance bar for placing stimulation pulses)."""
     from mef3io_coregistration.synthetic import build_or_load
 
     fx = build_or_load("drift_swing", data_dir=shared_data_dir)

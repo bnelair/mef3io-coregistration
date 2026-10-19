@@ -7,14 +7,15 @@ description: "What mef3io-coregistration computes at each alignment stage, the n
 A walk through the pipeline in the order you meet it. For each stage: the signal it runs on, the
 algorithm, the number it reports, the rule it uses to decide, and how it fails.
 
-Every threshold quoted here was measured, not chosen, on real clinical recording pairs.
+Every threshold quoted here was measured, not chosen: on clinical test pairs and on synthetic
+pairs with a known clock offset (`mef3io_coregistration.synthetic`). Figures from synthetic pairs
+are given as measured; results on clinical pairs are described without their specifics.
 
 Every step is a method of
 [`CoregSession`](api/python.md#mef3io_coregistration.session.CoregSession)
-(see [Align two recordings in Python](howto/align_python.md)). Where this page
-mentions the viewer, a button or a key, it describes the interactive review
-in a web console built on this engine; the same operation is available from
-Python.
+(see [Align two recordings in Python](howto/align_python.md)). A front end
+(an interactive viewer) can drive the same methods; where this page mentions
+one, the Python call is named alongside.
 
 **Sign convention, used everywhere without exception:**
 
@@ -37,13 +38,13 @@ read once, in ~5-minute chunks, into two products held in memory:
 
 The envelope keeps each bin's true minimum and maximum, so spikes and saturation stay visible
 when you are zoomed out. It is **not time-accurate within a bin** (the min and max are drawn at
-the bin boundary, not where they happened) and the viewer badges it as such.
+the bin boundary, not where they happened), so a front end should say so when it draws one.
 
 **The envelope is not an alignment feature and must never be used as one.** It summarises each
 file's raw signal at *that file's own bandwidth*, so a 20 ms bin of an 8 kHz channel means
-something physically different from the same bin of a 256 Hz channel — on the reference pair, a
-median bin range of 1246 µV against 49 µV. Correlating the two produced a Stage 1 estimate that
-was **2.96 hours wrong**.
+something physically different from the same bin of a 256 Hz channel: on a clinical test pair
+the two bin ranges differed by more than an order of magnitude, and correlating them produced a
+Stage 1 estimate **hours** from the truth.
 
 The decimation is **group-delay compensated** (zero-phase), so sample timing is preserved. If it
 were not, every lag this tool measures would be biased by the filter.
@@ -52,9 +53,10 @@ were not, every lag this tool measures would be biased by the filter.
 
 ## 1. Conditioning — applied before every correlation
 
-The two amplifiers agree on nothing: on the reference pair the cadence bipolar sits at a mean of
-−11,438 µV with excursions to −227 mV, the same derivation on natus at −38 µV with σ 2.4 mV — a
-250× amplitude difference plus a large slow component on one system only. Correlating that
+The two amplifiers agree on nothing: a high-rate DC-coupled recorder can sit at a large DC offset
+with stimulation excursions orders of magnitude above the physiology, while the same derivation
+on an AC-coupled 256 Hz clinical system is centred near zero — a large amplitude difference plus
+a large slow component on one system only. Correlating that
 directly lets a DC ramp on one machine dominate the physiology on the other.
 
 In order:
@@ -66,7 +68,7 @@ In order:
    trace and bias the very lag being measured):
    - high-pass, low-pass, and an optional **notch** which also removes that frequency's
      harmonics below Nyquist (a stim comb is not a single line).
-3. **Robust scale** by the MAD, not the standard deviation. A few ±200 mV stim excursions would
+3. **Robust scale** by the MAD, not the standard deviation. A few large stimulation excursions would
    set σ and crush the physiology to nothing.
 4. **Clip** at `clip_mad` robust sigmas. Bounds saturation without discarding the window.
 
@@ -86,13 +88,13 @@ Two different jobs, two different bands, and conflating them is what broke Stage
 | **Detection** (Stage 1) | **0.5–8 Hz** | Searches the whole recording and must produce ONE unambiguous peak. Two amplifiers with different references share their *low-frequency* physiology; above ~10 Hz the content is reference noise, amplifier noise and stim, uncorrelated between systems, and it only dilutes the match. |
 | **Estimation** (Stages 2–3) | **0.5–20 Hz** (default) | Searches a narrow seeded range, so ambiguity is not the risk — timing precision is, and an 8 Hz-limited trace cannot resolve a 4 ms sample. |
 
-Measured effect of the band on Stage 1 (4 templates, reference pair):
+Measured effect of the band on Stage 1 (4 templates, a clinical test pair):
 
 | band | recovered offset | templates agreeing |
 |---|---|---|
-| 0.5–40 Hz | −16022 s (**4.4 h wrong**) | 0/4 |
-| 0.5–20 Hz | −16022 s (**4.4 h wrong**) | 0/4 |
-| **0.5–8 Hz** | **−68.65 s** (truth −68.73) | **4/4** |
+| 0.5–40 Hz | **hours wrong** | 0/4 |
+| 0.5–20 Hz | **hours wrong** | 0/4 |
+| **0.5–8 Hz** | **within 0.1 s of the truth** | **4/4** |
 
 ---
 
@@ -143,8 +145,8 @@ local energy computed once instead of per template).
 **The decision rule: `locked` = a majority of templates agree (≥ 2, and more than half).**
 
 **Peak height is not the criterion, and must never become it.** Measured across true and
-deliberately false pairs, the detection SNR of a true lock spans 3.4–22 σ and of a false one
-2.7–4.4 σ — the distributions *overlap*, and a false pair can out-score a genuine lock. Peak
+deliberately false pairs, the detection SNR of true and false locks *overlaps*, and a false pair
+can out-score a genuine lock. Peak
 height is an absolute measure taken on surfaces that are not comparable between datasets. Template
 agreement separates the cases perfectly (true 4/4, false 0/4), and for a reason that should
 generalise: several 10-minute templates from different hours carry independent physiology; each
@@ -153,9 +155,9 @@ successful lock is annotated "locked, but weakly — confirm by eye". It has no 
 
 **If it does not lock, the stage says so — and is not a dead end.** Stimulation, or long
 artifact, can leave too few clean templates to corroborate an offset that is in fact right. The
-user may **continue with the best estimate** (`CoregSession.accept_gross`, "Continue with …" in
-a web console), or drag the moving trace into place (below). Either way the decision is recorded
-(`accepted_by = "user"`), carried in the saved result's QC and flagged in its warnings, and the
+user may **continue with the best estimate** (`CoregSession.accept_gross()`), or give the offset
+by hand (`CoregSession.manual_offset()`, below). Either way the decision is recorded
+(`accepted_by = "user"`) and carried in the saved result's QC (`stage1_accepted_by`), and the
 Fine anchors are what confirm or correct it: Stage 2 searches the neighbourhood of the ROI, not
 just the seed.
 
@@ -168,19 +170,14 @@ Runs when you hand-place an offset, and again on the fitted map after Stage 3.
 This is a **different question** from Stage 1's, and the one the pipeline used to assume the
 answer to. Every statistic in Stages 2 and 3 is computed on a correlation surface only ±0.25 s
 wide — the seeded search range — so it measures whether the peak is sharp *near where it was
-pointed*, and says nothing about whether it was pointed in the right place. Measured on the
-reference pair, that confidence is **higher at every wrong offset than at the true one**:
-
-| seed error | Stage-2 `confidence` |
-|---|---|
-| **0 s (the truth)** | **0.66** |
-| +60 s | 0.81 |
-| +3600 s | 0.85 |
+pointed*, and says nothing about whether it was pointed in the right place. Measured on a
+clinical test pair, that confidence was **higher at wrong offsets (a minute, an hour) than at the
+true one**.
 
 At a wrong offset two unrelated traces throw up one sharp random blip, which is very "distinct";
 the true offset has a broad genuine ridge, which is less distinct against its own shoulders. So an
-hour-wrong hand placement used to sail through: 195/258 windows accepted, a smooth drift curve,
-and no warning anywhere.
+hour-wrong hand placement used to sail through: most drift windows accepted, a smooth drift
+curve, and no warning anywhere.
 
 **`verify_offset` asks the question those statistics cannot, on the full-length surface where it
 is answerable: do independent templates put their best match at this offset?** That is the lock
@@ -192,12 +189,15 @@ criterion, seeded — and it has no threshold to tune.
 | 1 minute wrong | 0/4 | ✗ |
 | **1 hour wrong** | **0/4** | **✗** |
 
-In a web console a hand placement is always accepted; the check is **reported**, not a veto — a
-placement the templates do not support is flagged "BY HAND · UNCONFIRMED", recorded, and warned
-about in QC. (Through the API/Python, `manual_offset` refuses it unless `force=True`.)
+`CoregSession.manual_offset(offset_s)` runs this check. A placement the templates support is a
+lock; one they do not support is recorded as unconfirmed and is not a lock, so the later stages
+refuse to build on it — unless `force=True`, which makes the override explicit and records it in
+the reason. A front end may choose to always accept a hand placement and show the verdict
+instead; the verdict travels in the saved QC either way.
 
 **Your placement is what is used.** Verification decides whether to accept it; it does not move
-it. Where the templates disagree, the difference is reported and offered as a button.
+it. Where the templates disagree, their own estimate is reported
+(`OffsetVerification.refined_offset_s`) for you to adopt deliberately, or not.
 
 ---
 
@@ -210,26 +210,27 @@ and the same window from the moving trace at the **seeded** position (`roi_centr
 Normalized cross-correlation between them, bounded to ±`max_residual_s`, with **parabolic
 sub-sample peak interpolation**. The anchor's offset is `seed + measured residual`.
 
-**The seed is the offset you have on screen at that ROI** — not a stored value. A refinement stage
+**The seed is the offset you pass** (`run_fine(roi, seed_offset_s=...)`; by default the current
+Stage 1 offset) — the offset at that ROI as you see it, not a stale stored value. A refinement stage
 whose search is bounded cannot reach past its own seed's error: seed it 3 s off with a ±0.5 s
 search and it returns a confidently wrong anchor 3 s away, rather than correcting anything.
 
 **Unless you placed it by hand, the seed is first refined locally.** After an automatic lock the
-on-screen offset is Stage 1's *single* offset for the whole recording — and over a day the clocks
+default seed is Stage 1's *single* offset for the whole recording — and over a day the clocks
 drift by seconds (the consensus tolerance `GROSS_CONSENSUS_S` exists to absorb exactly that). At
 an ROI 6 h into a ±5 s day the lock was 0.5 s from the truth there, and Stage 2 returned the best
 peak *inside* its ±0.5 s search: **604.51 s for a true 605.00 s, confidence 0.45** — confident and
-wrong. So before refining, `local_seed` correlates ±10 min around the ROI on the **detection** band,
+wrong (a synthetic pair). So before refining, `local_seed` correlates ±10 min around the ROI on the **detection** band,
 searching ±2×`GROSS_CONSENSUS_S` around the seed, and moves the seed there only if that peak is
 distinctive and not on the search boundary; otherwise the seed is used as given. A seed you placed
-by hand (alt+drag, ← →, a typed and accepted offset) is always used as-is — a web console tracks
-that and sends `refine_seed: false` (from Python: `run_fine(..., refine_seed=False)`).
+by hand is used as-is when you say so: `run_fine(roi, seed_offset_s=..., refine_seed=False)`
+(a front end that lets you drag the traces into place should pass exactly that).
 
 **Window length is yours.** Long windows suit ongoing background; a *short* one (a few seconds) is
 right when the shared feature is a discrete event — a seizure, a stim train, a large discharge —
 where the information lives in those seconds and the surrounding minutes are uncorrelated noise
-that only dilutes the correlation. Measured on the reference pair, three anchors across the
-recording agree to within **25 ms at a 5 s window**, against 15 ms at 300 s. Only the upper bound
+that only dilutes the correlation. On a clinical test pair, anchors across the recording agreed
+to within a few tens of milliseconds even at a 5 s window, close to what 300 s windows gave. Only the upper bound
 is enforced (~30 min), and for an unrelated reason: past that the offset drifts measurably *within*
 the window and smears the peak the window exists to sharpen.
 
@@ -286,8 +287,8 @@ Then:
    budget `s = n` is principled rather than arbitrary.
 
 The old default asked the spline to pass within 0.3 *samples* (≈1 ms) of every window. On real
-data a single 20 s window locates the lag to only ~0.07 s, so the spline chased the noise: it swung
-**0.56 s** on a recording whose true drift is **0.15 s**.
+data a single 20 s window locates the lag far less precisely than that, so the spline chased the
+noise: on a clinical test pair it swung several times further than the true drift.
 
 **Map anchors are built only from ACCEPTED windows.** Building them from every window centre — and
 then reporting the full span as "measured" — is extrapolation dressed up as measurement.
@@ -305,7 +306,7 @@ seed and is marked rejected, never `NaN`.
 
 On short recordings — or a short overlap — the clocks have no room to drift, and a sliding-window
 fit does not measure drift: it fits the estimator's own scatter and presents the wiggle as a clock.
-**Build map without drift** builds it from what is actually known:
+`CoregSession.build_map_without_drift()` builds it from what is actually known:
 
 - **no anchors** → a constant offset from Stage 1
 - **one anchor** → a constant offset at that anchor's more precise value
@@ -321,27 +322,45 @@ still verified (§3).
 
 ## 7. QC — what to look at before you trust the map
 
-| number | what it means |
-|---|---|
-| **`map_verified`** | **the one that matters.** Do independent templates find the shared signal where the map says it is? If false, everything else describes a map that is in the wrong place. |
-| `max_abs_loo_residual_ms` | **leave-one-out**: refit the map without each anchor, then predict it. A correct map on the reference pair gives **32 ms**; an hour-wrong one gives **546 ms**. The plain anchor residual is self-consistency — the anchors seeded the spline — and will look excellent on a map that is three hours wrong. The refit uses the same `√confidence / σ` weighting as the fit (without the `1/σ`, `s = n` let it miss every window by ~1 s — invisible on a short pair, ~1 s of false residual over a day-long swing). |
-| `measured_span_uutc` | the span between the first and last **accepted** window. Not the recording. |
-| `extrapolated_fraction` | how much of the moving recording lies *outside* that span. On the reference pair: **91 %** — 2.15 h of cadence has to cover 24 h of natus. |
-| `extrapolation_budget_s` | worst-case offset error out there, from the end slope of the fit (~0.44 s). Beyond the measured span a Stage 3 map continues with **one drift rate per end**, fitted by least squares over the first/last fifth of the accepted windows (2–20) and stored in the map (`end_offset_slopes`): the map applies it, the plotted curve follows it, and this budget uses it — one extrapolation, not three. |
-| `n_accepted / n_windows`, `n_gapped` | how much of Stage 3 survived. |
-| `Gap.grid_offset_us` (reader) | where a recording resumes after a gap a fraction of a sample off its sampling grid, the samples after it are stamped on the grid — off by this much (≤ half a sample; warned above 1 %). On the recordings checked: < 1 µs. |
-| `overall_confidence` | mean distinctiveness of the accepted windows. |
+What a saved result carries, from `CoregSession.result()`:
 
-**And then look at the signal.** Zoom to a few seconds, switch to the alignment band, and check
-that the two traces sit on top of each other. Every number above can be satisfied by a map that is
+| where | number | what it means |
+|---|---|---|
+| `qc` | **`map_verified`** | **the one that matters.** Do independent templates find the shared signal where the map says it is (§3, run on the fitted map)? If false, everything else describes a map that is in the wrong place. |
+| `qc` | `verification` | the verification verdict in words: how many templates support the map, and how clearly |
+| `qc` | `stage1_accepted_by`, `stage1_reason` | `"templates"` when Stage 1 locked by agreement, `"user"` when someone continued or placed the offset by hand, and why |
+| `clock_map.metadata` | `measured_span_uutc` | the span between the first and last **accepted** window (or the anchors, without Stage 3). Not the recording: outside it the map is extrapolated, and reads flag those samples (`UnifiedRead.extrapolated`, `ClockMap.is_extrapolated`). |
+| `clock_map.metadata` | `end_offset_slopes` | beyond the measured span a Stage 3 map continues with **one drift rate per end**, fitted by least squares over the first/last fifth of the accepted windows (2–20): the map applies it and the plotted curve follows it. |
+| `clock_map.metadata` | `n_accepted / n_windows`, `n_gapped` | how much of Stage 3 survived, and how much was lost to gaps |
+| `drift` | `offset_s[]`, `smoothed_offset_s[]`, `confidence[]`, `accepted[]` | every drift window, for plotting the fit against what it was fitted to |
+
+`DriftEstimate.anchor_residual_s` (not saved) is each Stage 2 anchor's distance from the fitted
+map: a wrong anchor shows up there. It is self-consistency only — the anchors seeded the walk —
+and can look excellent on a map that is globally wrong; that is what `map_verified` is for.
+
+A front end may pass a fuller QC report to `CoregSession.result(qc=...)`, for example a
+**leave-one-out residual** (refit without each anchor, then predict it; `MAX_LOO_RESIDUAL_MS` in
+`config` is a suggested bound for it). The engine does not compute one itself; the
+[review report](howto/review_report.md) shows it when the result carries it, and makes its own
+independent check instead: the **residual lag** re-measured in fresh windows after
+coregistration (figure 5).
+
+The reader adds one more: `Gap.grid_offset_us` — where a recording resumes after a gap a
+fraction of a sample off its sampling grid, the samples after it are stamped on the grid, off by
+this much (at most half a sample; warned above 1 %).
+
+**And then look at the signal.** Read a few seconds of both files on the reference clock
+(`CoregisteredReader.get_data(..., coregister=True)`, or the review report's multi-scale figure),
+filtered to the alignment band, and check that the two traces sit on top of each other. Every number above can be satisfied by a map that is
 subtly wrong; the overlay is the only check that cannot.
 
 ---
 
 ## 8. Using the two files as one recording
 
-Once the map exists, the **Recording** stage (and `reader.unified.CoregisteredRecording` in
-Python) serves both files as a single recording on the reference clock.
+Once the map exists, `CoregisteredRecording` (`CoregisteredRecording.open(result)`, or
+`CoregSession.open_recording()` before saving) serves both files as a single recording on the
+reference clock.
 
 - **Logical channels.** Each names its signal in file A and/or file B — a channel, or an
   `anode − cathode` pair, chosen *per file*: the two systems need not share names or montage. By
@@ -361,8 +380,8 @@ Python) serves both files as a single recording on the reference clock.
   A refused channel serves its preferred file only, with a note saying why and what to change;
   `allow_mismatch` overrides the gate deliberately. Single-source channels are not gated.
   **The baseline (DC) is reported, not gated** (`offset_b_minus_a`, `baseline_step`): a
-  DC-coupled amplifier's baseline wanders by more than its signal (the real Cadence recording
-  drifts by hundreds of µV between minutes), so no constant offset fits and gating on it would
+  DC-coupled amplifier's baseline can wander by more than its signal from one minute to the
+  next, so no constant offset fits and gating on it would
   refuse sources that agree. When the baselines differ by more than the signal's spread the
   verdict says so ("agree · step"): expect a step at each switch, and filter each run
   (`UnifiedRead.runs()`) on its own.
@@ -374,13 +393,12 @@ Python) serves both files as a single recording on the reference clock.
   file at its native rate is returned untransformed. Moving-file samples are resampled through the
   map (anti-alias decimation when needed, ×4 band-limited oversampling, cubic interpolation; gaps
   are never interpolated across).
-- **Display.** Zoomed out, the viewer draws each source from a cached ~50 Hz min–max envelope
-  (extremes right, timing within a bin not — badged "not time-accurate"); zoomed in, the exact
-  resampled samples. Each source gets its own display gain: the two amplifiers differ by orders of
-  magnitude, and one gain would flatten one side into a line. In the merged lane both sources
-  share one scale (after correction), so a gain mismatch is visible rather than hidden, and a
-  dotted marker shows each switch between files. The viewer is a **display and navigation aid**:
-  analysis reads the data through Python.
+- **Display.** `CoregisteredRecording.display()` gives a front end min/max buckets per
+  source: zoomed out, from a cached ~50 Hz min–max envelope (extremes right, timing within a bin
+  not — it should say so); zoomed in, from the exact resampled samples. A front end should give
+  each source its own display gain (two amplifiers can differ by orders of magnitude, and one gain
+  flattens one side into a line), and mark each switch between files. Display is a **navigation
+  aid**: analysis reads the data with `get_data`.
 - **Runs.** `UnifiedRead.runs()` returns the contiguous single-source stretches. Filter, detect
   or measure each run on its own: a statistic spanning a switch mixes two amplifiers (bandwidth,
   hardware filters, reference, stim handling).
@@ -400,10 +418,10 @@ Python) serves both files as a single recording on the reference clock.
 
 | symptom | cause | what to do |
 |---|---|---|
-| Stage 1 will not lock | templates disagree — genuinely weak shared signal, stimulation, wrong channel, or opposite polarity | flip a file's polarity (×−1 in the viewer) and re-run; try another channel for Stage 1; or continue with the best estimate / align by hand and let Fine anchors confirm it |
+| Stage 1 will not lock | templates disagree — genuinely weak shared signal, stimulation, wrong channel, or opposite polarity | flip a file's polarity (`set_polarity("moving", True, "gross")`) and re-run; try another channel for Stage 1; or continue with the best estimate / align by hand and let Fine anchors confirm it |
 | Stage 1 locks somewhere absurd | should not happen — agreement is what prevents it. If it does, the templates all matched the same artifact | narrow the band; verify by eye |
-| Refine jumps somewhere unreasonable | the seed was too far from the truth for the bounded search | seed it from the overlay (the UI does this), or widen `search ±` |
+| Refine jumps somewhere unreasonable | the seed was too far from the truth for the bounded search | pass a better seed (`run_fine(roi, seed_offset_s=...)`, e.g. read off an overlay), or widen `max_residual_s` |
 | Anchor has high `ncc` but low `confidence` | the two traces are similar *everywhere* in the window — no unique lag | pick an ROI with a distinctive event |
 | Drift rejects nearly every window | shared signal too weak on this channel, or the anchor is wrong | check the anchor; change channel or filters |
 | Drift curve wiggles far more than the physical drift | you are fitting measurement noise | there is probably nothing to fit — bypass Stage 3 |
-| Everything green, overlay clearly misaligned | trust the overlay | re-align by hand; the QC numbers cannot see a globally wrong offset that verification did not catch |
+| Everything green, overlay clearly misaligned | trust the overlay | re-align by hand (`manual_offset`); the QC numbers cannot see a globally wrong offset that verification did not catch |

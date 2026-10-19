@@ -1,13 +1,13 @@
 """Background full-length loader.
 
 Reads a file's alignment channel(s) across the whole recording in ~5-minute chunks and
-produces the two in-memory products the session holds (R11.4): a band-limited decimated
+produces the two in-memory products the session holds: a band-limited decimated
 full-length trace (Stage 2/3) and a ~50 Hz min-max envelope (Stage 1/display). The raw
 full-Fs full-length signal is **never** held — only one chunk at a time is in memory.
 
 The synchronous core :func:`load_alignment_signal` takes optional ``progress`` and ``cancel``
 hooks so it is testable in-process; :class:`BackgroundLoad` wraps it in a cancellable
-subprocess with progress reporting, and distinct specs run concurrently (R11.3, R11.5, R11.6).
+subprocess with progress reporting, and distinct specs run concurrently.
 
 Decimation is streamed with overlap-save: each chunk is read with a margin on both sides so
 the polyphase FIR's edge transient falls outside the retained core, matching a full-length
@@ -82,7 +82,12 @@ class BackgroundLoad:
                 self.error = payload if kind == "error" else None
         if exited and self._status == "running":
             self._status = "error"
-            self.error = f"loader process exited unexpectedly (exit code {self._proc.exitcode})"
+            self.error = (
+                f"loader process exited unexpectedly (exit code {self._proc.exitcode}). Loads run "
+                "in spawned worker processes, which re-import the calling script: if this came "
+                "from a script, put the calling code under `if __name__ == \"__main__\":`, or "
+                "use CoregSession(background=False) to load in this process."
+            )
         return self._status
 
     def wait(self, timeout: float | None = None) -> str:

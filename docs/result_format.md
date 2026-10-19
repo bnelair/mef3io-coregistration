@@ -12,9 +12,9 @@ made. Keys are written sorted, with 2-space indentation, and every absolute
 time is an **integer uUTC** (microseconds since the Unix epoch), so saving,
 loading and saving again gives the same bytes and the same map.
 
-The `format` identifiers below keep the names of the private builds this
-package grew out of, so that every result made since opens unchanged. They
-are identifiers, not package names.
+The `format` identifiers below are historical and kept for compatibility:
+every result and mapping saved since they were introduced opens unchanged.
+They are identifiers, not package names.
 
 ## The result: `signal_coregistration.coreg_result`
 
@@ -33,7 +33,7 @@ are identifiers, not package names.
 | `drift` | object or null | the Stage 3 windows: `t_ref_uutc[]`, `offset_s[]`, `smoothed_offset_s[]`, `confidence[]`, `accepted[]`, `gapped[]`, `window_s`, `grid_s`, `measured_span_uutc` |
 | `stage_channels` | object | per stage (`gross`, `fine`): the channel label used in the `reference` and `moving` file (an inverted one is marked) |
 | `stage_filters` | object | the filters behind the map: `gross` (the detection band), `fine` (a list of `{t_ref_uutc, filters}`, one per anchor), `drift`; each filter set has `highpass_hz`, `lowpass_hz`, `notch_hz`, `notch_q`, `clip_mad`, `feature` |
-| `qc` | object or null | the quality report: at least `map_verified`, `verification`, `stage1_accepted_by` (`"templates"` or `"user"`) and `stage1_reason`; a front end may store a fuller report (see [Methods §7](methods.md#7-qc-what-to-look-at-before-you-trust-the-map)) |
+| `qc` | object or null | the quality report `CoregSession.result()` writes: `map_verified` and `verification` (once the map has been verified), `stage1_accepted_by` (`"templates"` or `"user"`) and `stage1_reason`; a front end may store a fuller report with `result(qc=...)` (see [Methods §7](methods.md#7-qc-what-to-look-at-before-you-trust-the-map)) |
 
 **Only `file_fingerprints.<role>.start_uutc` and `end_uutc` are used to
 match a file** to the result (within 1 s; see
@@ -55,7 +55,7 @@ Embedded in the result under `clock_map`, or saved on its own by
 | `y_moving` | list of int | the same instants on the moving clock, uUTC, strictly increasing |
 | `interp_method` | string | `"linear"` (default) or `"pchip"` (monotone cubic) between knots |
 | `extrapolation` | string | `"hold_end_slope"`: beyond the knots the map continues with the end slope |
-| `metadata` | object | provenance from the stage that built the map: `stage` (`"drift"` or `"no-drift"`), `measured_span_uutc` (the span actually measured: first to last accepted drift window, or first to last anchor; without it, the knots' span). A drift map adds `end_offset_slopes` (the drift rate used beyond each end), its parameters (`window_s`, `grid_s`, `max_residual_s`, `min_confidence`, `max_gap_fraction`), the window counts (`n_windows`, `n_accepted`, `n_gapped`) and the `anchors` it was seeded from; a no-drift map adds `method`, `n_anchors` and the `assumption` it rests on |
+| `metadata` | object | provenance from the stage that built the map: `stage` (`"drift"` or `"no-drift"`), `measured_span_uutc` (the span actually measured: first to last accepted drift window, or first to last anchor; without it, the knots' span). A drift map adds `end_offset_slopes` (the drift rate used beyond each end), its parameters (`window_s`, `grid_s`, `max_residual_s`, `min_confidence`, `max_gap_fraction`), the window counts (`n_windows`, `n_accepted`, `n_gapped`) and the Stage 2 anchors it was seeded from (`anchors`: a list of `{t_ref_uutc, offset_s}`, and `anchor`: the first of them, kept for files written before several anchors were supported); a no-drift map adds `method`, `n_anchors` and the `assumption` it rests on |
 
 The map is the function *t*<sub>moving</sub> = *f*(*t*<sub>reference</sub>);
 the offset at a reference time is `y − x`. Because both arrays increase
@@ -72,7 +72,7 @@ Written by `CoregisteredRecording.save_config`, read by
 |---|---|---|
 | `format` | string | `"signal_coregistration.recording"` |
 | `format_version` | int | `1` |
-| `result` | string or null | the result file it applies to (a bare file name means "next to this file") |
+| `result` | string or null | the result file it applies to, as passed to `save_config(result_path=...)`. On opening, a relative path is first looked for relative to the mapping's folder, and a path that no longer exists is looked for by its file name next to the mapping |
 | `result_sha256` | string or null | that result file's SHA-256; a result changed since is refused unless `verify=False` |
 | `default_prefer` | `"A"` or `"B"` | the preferred file for channels that do not set one |
 | `channels` | list | the logical channels: `name`; `a` and `b` (each `{anode, cathode}` or null: the signal in that file, bipolar when `cathode` is set); `prefer`; `fs` (output rate, null = the preferred file's); `scale_a`, `offset_a`, `scale_b`, `offset_b` (value′ = scale · value + offset); `allow_mismatch` |

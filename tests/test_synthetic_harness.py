@@ -1,4 +1,4 @@
-"""Tests for the synthetic-warp harness (Milestone M1).
+"""Tests for the synthetic-warp harness.
 
 The harness is the foundation every later milestone is tested against, so these tests
 validate two distinct things:
@@ -83,7 +83,7 @@ def test_roundtrip_mef3(name, shared_data_dir):
 @pytest.mark.slow
 def test_ground_truth_map_is_monotonic(shared_data_dir):
     """The clock map must be strictly monotonic even though the offset swings both ways
-    (invariant R6.4) — otherwise it would not be invertible."""
+    (an invariant) — otherwise it would not be invertible."""
     fx = build_or_load("drift_swing", data_dir=shared_data_dir)
     ref = fx.load_reference()
     moving_clock = fx.forward_uutc(ref.ts)

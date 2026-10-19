@@ -1,10 +1,10 @@
 """Signal conditioning for the alignment path.
 
 Every stage correlates *conditioned* traces, never raw ones. The two amplifiers do not agree
-on scale, offset, or bandwidth: on the reference dataset the cadence bipolar LD1-LD3 has mean
--11,438 uV and excursions to -226,729 uV, while the same derivation on natus has mean -38 uV
-and sigma 2,411 uV — a ~250x amplitude difference plus a large slow component on one amplifier
-only. Correlating those directly lets a DC ramp on one system dominate the physiology on the
+on scale, offset, or bandwidth: a high-rate DC-coupled recorder can show a large DC offset
+and stimulation excursions orders of magnitude above the physiology, while
+the same derivation on an AC-coupled clinical system is centred near zero — a large amplitude
+difference plus a large slow component on one amplifier only. Correlating those directly lets a DC ramp on one system dominate the physiology on the
 other.
 
 Conditioning is four steps, in order:
@@ -12,10 +12,10 @@ Conditioning is four steps, in order:
 1. **Gap interpolation.** ``NaN`` gap samples are linearly bridged *before* filtering so the
    IIR does not ring off a step edge, then re-zeroed afterwards. The ``valid`` mask records
    where the signal was real; correlation windows that overlap too much gap are rejected
-   upstream rather than silently correlated against zeros (REVIEW B3).
+   upstream rather than silently correlated against zeros.
 2. **High-pass** (zero-phase, so no group delay is introduced — timing is the whole point).
    Removes the DC/slow drift that differs per amplifier.
-3. **Robust scaling** by the MAD, not the standard deviation: a few ±200 mV stim excursions
+3. **Robust scaling** by the MAD, not the standard deviation: a few large stimulation excursions
    would set sigma and crush the physiology to nothing.
 4. **Clipping** at ``clip_mad`` robust sigmas, which bounds saturation and stim artifact
    without discarding the window.
@@ -63,7 +63,7 @@ class FilterSpec:
     Not a session-wide mode. The right band genuinely differs from one ROI to the next: a stretch
     dominated by stim artifact may need a tight low-pass and a notch to be alignable at all, while
     the same recording an hour later aligns best wide open. So a filter set travels *with* each
-    request — the view, the anchor, the drift fit — and the viewer sends the same one it is
+    request — the view, the anchor, the drift fit — and a front end can send the same one it is
     drawing, so what you align on is what you were looking at.
 
     ``notch_hz`` is a band-stop (mains and its harmonics, or a stimulation rate). Zero-phase

@@ -285,7 +285,7 @@ class CoregisteredRecording:
         longer exists is looked for next to the config. The config holds the result file's hash:
         a result overwritten since is refused (as are MEF3 files whose start or end differs from
         the result's by more than 1 s), unless ``verify=False``."""
-        d = json.loads(Path(config_path).read_text())
+        d = json.loads(Path(config_path).read_text(encoding="utf-8"))
         if d.get("format") != _FORMAT:
             raise ValueError(f"not a recording config (format={d.get('format')!r})")
         res = result if result is not None else d["result"]
@@ -321,7 +321,7 @@ class CoregisteredRecording:
             None if result_path is None else str(result_path),
             None if result_path is None else _sha256(result_path),
         )
-        path.write_text(json.dumps(doc, indent=2, sort_keys=True))
+        path.write_text(json.dumps(doc, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
         return path
 
     def config_dict(self, result: str | None, result_sha256: str | None) -> dict:

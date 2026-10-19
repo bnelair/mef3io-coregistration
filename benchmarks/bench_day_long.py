@@ -1,6 +1,6 @@
-"""R10 performance benchmarks on a 24 h synthetic recording.
+"""Performance benchmarks on a day-long synthetic recording.
 
-    python benchmarks/bench_r10.py [--fs 256] [--hours 24]
+    python benchmarks/bench_day_long.py [--fs 256] [--hours 24]
 
 Budgets: Stage 1 gross over 24 h within an interactive budget (< 2 s target);
 Stage 3 drift over 24 h in < a few seconds at moderate Fs. The pair (10-minute offset, ±5 s swing
@@ -40,7 +40,7 @@ def main() -> None:
     t0 = time.perf_counter()
     gross = estimate_gross_offset(ref, mov)
     t_gross = time.perf_counter() - t0
-    print(f"R10.1 gross  : {t_gross:6.2f} s  (target < 2 s)  offset {gross.offset_s:.3f} s, "
+    print(f"gross  : {t_gross:6.2f} s  (target < 2 s)  offset {gross.offset_s:.3f} s, "
           f"locked={gross.locked}")
 
     anchors = []
@@ -50,7 +50,7 @@ def main() -> None:
         seed = local_seed(ref, mov, roi, gross.offset_s).offset_s
         anchors.append(estimate_anchor(ref, mov, roi, seed, half_window_s=150.0, max_residual_s=0.5))
     t_fine = time.perf_counter() - t0
-    print(f"      fine   : {t_fine:6.2f} s  for {len(anchors)} anchors (local seed + refine)")
+    print(f"fine   : {t_fine:6.2f} s  for {len(anchors)} anchors (local seed + refine)")
 
     t0 = time.perf_counter()
     drift = estimate_drift(ref, mov, anchors)
@@ -59,7 +59,7 @@ def main() -> None:
     ok = drift.accepted
     err = (drift.smoothed_offset_s[ok] - spec.offset_s(tr[ok])) * args.fs
     print(
-        f"R10.2 drift  : {t_drift:6.2f} s  (target < a few s)  {ok.sum()}/{ok.size} windows, "
+        f"drift  : {t_drift:6.2f} s  (target < a few s)  {ok.sum()}/{ok.size} windows, "
         f"RMS {np.sqrt(np.mean(err**2)):.3f} samples"
     )
 

@@ -1,11 +1,11 @@
 """Coregistration session.
 
-Holds in-memory products from file/channel selection until explicitly closed (R11.1),
+Holds in-memory products from file/channel selection until explicitly closed,
 orchestrates the three stages, and drives the background loaders. Channels are selected per
-stage (default: matching channel names across both files, R11.2). Loading a stage reads both
-files' alignment channels full-length in ~5-minute chunks (R11.3) into the decimated +
-envelope products (R11.4); if a stage's channels match an already-loaded stage the product is
-**reused**, otherwise the two files load **concurrently** (R11.5).
+stage (default: matching channel names across both files). Loading a stage reads both
+files' alignment channels full-length in ~5-minute chunks into the decimated +
+envelope products; if a stage's channels match an already-loaded stage the product is
+**reused**, otherwise the two files load **concurrently**.
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ def _serialized(method):
 
 
 class NotLocked(RuntimeError):
-    """Stage 1 did not lock, so later stages must not run on its offset (R4, REVIEW B1)."""
+    """Stage 1 did not lock, so later stages must not run on its offset."""
 
 
 @dataclass
@@ -66,7 +66,7 @@ class _Stage:
 
 
 class CoregSession:
-    """Interactive, stateful coregistration of two MEF3 files (R11)."""
+    """Interactive, stateful coregistration of two MEF3 files."""
 
     def __init__(
         self, envelope_fs: float = ENVELOPE_FS_HZ, chunk_s: float = 300.0, background: bool = True
@@ -99,7 +99,7 @@ class CoregSession:
         self.drift_estimate: DriftEstimate | None = None
         self.clock_map: ClockMap | None = None
 
-    # -- lifecycle (R11.1) --------------------------------------------------
+    # -- lifecycle --------------------------------------------------
     def open(self, file_a: str, file_b: str, reference: FileRole = "A") -> CoregSession:
         """Choose the two recordings (``.mefd`` or ``.mefd.tar``) and which is the reference.
 
@@ -113,7 +113,7 @@ class CoregSession:
         return self
 
     def close(self) -> None:
-        """Release the in-memory products (they live until the session is closed, R11.1)."""
+        """Release the in-memory products (they live until the session is closed)."""
         self._products.clear()
         self._fs_cache.clear()
         self._display_envelopes.clear()
@@ -134,7 +134,7 @@ class CoregSession:
         """The moving recording's path (resampled onto the reference clock when read)."""
         return self._files["B" if self.reference_role == "A" else "A"]
 
-    # -- channel selection (R11.2) -----------------------------------------
+    # -- channel selection -----------------------------------------
     @_serialized
     def set_channels(
         self,
@@ -146,7 +146,7 @@ class CoregSession:
         invert_reference: bool = False,
         invert_moving: bool = False,
     ) -> None:
-        """Select ``stage`` alignment channels, independently per file (R11.2, R3.2, R3.3).
+        """Select ``stage`` alignment channels, independently per file.
 
         By default the same ``(anode, cathode)`` names are used on both files. Pass
         ``reference``/``moving`` — each an ``(anode, cathode)`` pair — to choose different
@@ -188,7 +188,7 @@ class CoregSession:
             self._invalidate_map()
         self._stages[stage] = new
 
-    # -- loading (R11.3–R11.6) ---------------------------------------------
+    # -- loading ---------------------------------------------
     def load(self, stage: str, on_progress=None) -> dict[str, LoadProduct]:
         """Load both files' products for ``stage`` (reusing cached, else concurrent).
 
@@ -336,14 +336,14 @@ class CoregSession:
             for k, st in self._stages.items()
         }
 
-    # -- stages (R4–R6) -----------------------------------------------------
+    # -- stages -----------------------------------------------------
     @_serialized
     def run_gross(self, on_progress=None, **kwargs) -> GrossOffset:
         """Stage 1 on the **decimated waveform** — never the min-max envelope.
 
         The envelope is a display product: it summarises each file's raw signal at that file's
         own bandwidth, so the same 20 ms bin means different things on an 8 kHz amplifier and a
-        256 Hz one, and correlating the two is meaningless (REVIEW B1, see align/gross.py).
+        256 Hz one, and correlating the two is meaningless (see align/gross.py).
         """
         products = self.load("gross", on_progress=on_progress)
         g = estimate_gross_offset(
@@ -386,7 +386,7 @@ class CoregSession:
         self.map_verification = None
 
     def verify_offset(self, offset_s: float) -> OffsetVerification:
-        """Does the shared signal actually support ``offset_s``? (R12, REVIEW-2 N1)"""
+        """Does the shared signal actually support ``offset_s``?"""
         products = self.load("gross")
         return verify_offset(
             products["reference"].decimated, products["moving"].decimated, float(offset_s)
@@ -394,14 +394,14 @@ class CoregSession:
 
     @_serialized
     def manual_offset(self, offset_s: float, force: bool = False) -> GrossOffset:
-        """Accept a human-supplied offset as the Stage 1 result (R4.3, R9.1) — **after checking it**.
+        """Accept a human-supplied offset as the Stage 1 result — **after checking it**.
 
         The escape hatch that makes the tool human-in-the-loop: when the automatic estimate does
         not lock, the user drags the moving trace onto the reference. But a human's say-so is not
         evidence, and this used to mint ``locked=True, confidence=1.0`` on the strength of a drag,
         walking straight past the only check the pipeline had. Hand-place the offset an hour wrong
         and Stage 3 would accept 195 of 258 windows, fit a smooth curve, and raise no warning at
-        all (REVIEW-2 N1).
+        all.
 
         So the drag is *verified*: we ask whether the shared signal is actually present at that
         offset. If it is not, this is not a lock, and the later stages will refuse it.
@@ -466,7 +466,7 @@ class CoregSession:
         """
         g = self.gross_offset
         if g is None:
-            raise RuntimeError("No Stage 1 estimate yet — run Auto-align first.")
+            raise RuntimeError("No Stage 1 estimate yet — run run_gross() first.")
         if g.locked:
             return g
         accepted = replace(
@@ -496,7 +496,7 @@ class CoregSession:
         on_progress=None,
         refine_seed: bool = True,
     ) -> Anchor:
-        """Stage 2 at an ROI (R5). ``refine_seed``: first refine the seed from the ROI's
+        """Stage 2 at an ROI. ``refine_seed``: first refine the seed from the ROI's
         neighbourhood (:func:`~mef3io_coregistration.align.fine.local_seed`); pass False when the
         seed was placed by hand and must be used as-is."""
         products = self.load("fine", on_progress=on_progress)
@@ -568,7 +568,7 @@ class CoregSession:
         )
 
     def _require_lock(self) -> GrossOffset:
-        """Refuse to build on a failed Stage 1 (REVIEW B1).
+        """Refuse to build on a failed Stage 1.
 
         The old pipeline reported confidence 0.000, marked the stage done, and let Stage 2
         "refine" an offset that was three hours wrong into an anchor. A tool that fails is
@@ -577,7 +577,7 @@ class CoregSession:
         """
         if self.gross_offset is None:
             raise RuntimeError(
-                "No Stage 1 offset yet — run Auto-align in Stage 1 (or accept an offset by hand) first."
+                "No Stage 1 offset yet — run run_gross() (or give one with manual_offset()) first."
             )
         if not self.gross_offset.locked:
             raise NotLocked(self.gross_offset.reason)
@@ -585,7 +585,7 @@ class CoregSession:
 
     @_serialized
     def build_map_without_drift(self) -> ClockMap:
-        """Produce a clock map WITHOUT Stage 3 — a deliberate bypass, not a shortcut (R6, R7).
+        """Produce a clock map WITHOUT Stage 3 — a deliberate bypass, not a shortcut.
 
         Stage 3 exists to track a clock that wanders over many hours. When it has nothing to
         track, running it anyway is not conservative — it is fitting a curve to noise. That is
@@ -649,7 +649,7 @@ class CoregSession:
         self.drift_estimate = None
 
         # The map still gets checked. Bypassing Stage 3 is a statement about drift, not a licence
-        # to skip asking whether the offset is in the right place at all (REVIEW-2 N1).
+        # to skip asking whether the offset is in the right place at all.
         self.map_verification = verify_offset(
             ref, products["moving"].decimated, float(np.median(offsets))
         )
@@ -664,8 +664,8 @@ class CoregSession:
         if anchor is None:
             if not self.anchors:
                 raise RuntimeError(
-                    "Place at least one anchor in Stage 2 (Fine) before estimating drift — "
-                    "or build the map without drift."
+                    "Place at least one anchor with run_fine() (Stage 2) before estimating drift — "
+                    "or build the map with build_map_without_drift()."
                 )
             anchor = list(self.anchors)
         self._drift_filters = _filters_dict(kwargs.get("filters"))
@@ -678,7 +678,7 @@ class CoregSession:
         # a ±0.25 s surface around wherever the seed pointed, so a globally wrong seed produces
         # windows that look excellent — 195 of 258 accepted, a smooth curve, no warnings — while
         # the map is an hour out. The only way to catch that is to ask, on the full-length
-        # correlation, whether the shared signal is really where the map says it is (REVIEW-2 N1).
+        # correlation, whether the shared signal is really where the map says it is.
         mid = int(np.median(self.drift_estimate.t_ref_uutc))
         fitted = float(np.interp(
             mid, self.drift_estimate.t_ref_uutc, self.drift_estimate.smoothed_offset_s
@@ -716,7 +716,7 @@ class CoregSession:
     @_serialized
     def result(self, qc: dict | None = None) -> CoregResult:
         """The saved artefact: map + provenance, the files' fingerprints and the QC report
-        (``qc``; the API passes its full report)."""
+        (``qc``; a front end may pass its fuller report)."""
         if self.clock_map is None:
             raise RuntimeError(
                 "No clock map yet — estimate drift in Stage 3, or build the map without drift."
@@ -783,7 +783,7 @@ class CoregSession:
         )
 
     def open_recording(self, channels=None, default_prefer: FileRole | None = None):
-        """The two files as one recording through the current clock map (R14).
+        """The two files as one recording through the current clock map.
 
         Display envelopes are cached on the session, so re-mapping channels or refitting the map
         does not re-read every channel."""

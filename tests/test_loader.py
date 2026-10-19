@@ -1,7 +1,7 @@
 """Tests for the background loader.
 
-Streaming products match a full-length pass (R11.4), progress is monotonic (R11.6), loads are
-cancellable (R11.3), and distinct specs run concurrently (R11.5). The multiprocessing paths
+Streaming products match a full-length pass, progress is monotonic, loads are
+cancellable, and distinct specs run concurrently. The multiprocessing paths
 are marked ``slow``.
 """
 from __future__ import annotations
@@ -52,7 +52,7 @@ class _CancelAfter:
 
 
 def test_streaming_products_match_full_pass(write_mef):
-    """Chunked decimation + envelope reproduce a full-length pass (R11.4)."""
+    """Chunked decimation + envelope reproduce a full-length pass."""
     path = _two_channel_file(write_mef)
     spec = LoadSpec(str(path), "a", "c", target_fs=512.0, chunk_s=30.0)
     product = load_alignment_signal(spec)
@@ -103,7 +103,7 @@ def test_cancel_token_aborts_load(write_mef):
 
 
 # --------------------------------------------------------------------------- #
-# multiprocessing paths (R11.3, R11.5)
+# multiprocessing paths
 # --------------------------------------------------------------------------- #
 @pytest.mark.slow
 def test_background_load_completes_and_cancels(write_mef):
@@ -123,7 +123,7 @@ def test_background_load_completes_and_cancels(write_mef):
 
 @pytest.mark.slow
 def test_distinct_loads_run_concurrently(write_mef):
-    """Two distinct loads make progress at the same time, not one after the other (R11.5).
+    """Two distinct loads make progress at the same time, not one after the other.
 
     Checked structurally — both workers part-way through at one moment — rather than by timing,
     which depends on how many cores the machine has (a 2-core CI runner is not ~2x faster). This

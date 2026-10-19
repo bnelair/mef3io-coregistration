@@ -56,7 +56,7 @@ All MEF 3.0 access goes through [mef3io](https://github.com/bnelair/mef3io).
 from mef3io_coregistration.session import CoregSession
 from mef3io_coregistration.reader import CoregisteredSession
 
-with CoregSession() as sess:                       # align
+with CoregSession(background=False) as sess:       # align (loading in this process)
     sess.open("system_a.mefd", "system_b.mefd", reference="A")
     sess.set_channels("gross", "C3")
     sess.set_channels("fine", "C3")

@@ -44,7 +44,7 @@ def test_save_load_roundtrip_preserves_provenance(tmp_path):
 
 
 def test_reload_evaluates_identical_map(tmp_path):
-    """R7.5: the reloaded clock map produces identical outputs."""
+    """the reloaded clock map produces identical outputs."""
     res = _result()
     loaded = CoregResult.load(res.save(tmp_path / "res.json"))
     q = np.linspace(*res.clock_map.domain, 500).astype(np.int64)
@@ -57,11 +57,11 @@ def test_resave_is_byte_stable(tmp_path):
     res = _result()
     first = res.save(tmp_path / "a.json")
     second = CoregResult.load(first).save(tmp_path / "b.json")
-    assert first.read_text() == second.read_text()
+    assert first.read_text(encoding="utf-8") == second.read_text(encoding="utf-8")
 
 
 def test_rejects_foreign_file(tmp_path):
     p = tmp_path / "foreign.json"
-    p.write_text('{"format": "nope"}')
+    p.write_text('{"format": "nope"}', encoding="utf-8")
     with pytest.raises(ValueError, match="not a coreg result"):
         CoregResult.load(p)

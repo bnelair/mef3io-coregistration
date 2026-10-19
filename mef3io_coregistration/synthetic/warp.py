@@ -26,8 +26,8 @@ class WarpSpec:
 
     Components are summed:
 
-    - ``offset0_s``      constant absolute offset — can be minutes; models the
-                         offline, no-DST cadence clock.
+    - ``offset0_s``      constant absolute offset — can be minutes; models a
+                         second recorder whose clock is set by hand.
     - ``rate_s_per_s``   linear drift rate.
     - ``swing_amp_s``    amplitude of a smooth sinusoidal wander — models drift
                          that goes positive then negative over a day.

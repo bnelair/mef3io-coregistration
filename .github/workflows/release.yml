@@ -20,16 +20,28 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      SIGCOREG_DATA_DIR: ${{ runner.temp }}/sigcoreg-data
     steps:
       - uses: actions/checkout@v4
+      # The runner context is not available in a job-level env, hence GITHUB_ENV.
+      - name: Data folder for the synthetic fixtures
+        run: echo "SIGCOREG_DATA_DIR=$RUNNER_TEMP/sigcoreg-data" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Tag matches VERSION
         if: startsWith(github.ref, 'refs/tags/')
         run: test "v$(tr -d ' \n' < VERSION)" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME, VERSION $(cat VERSION)"; exit 1; }
+      # The release notes page becomes the GitHub release text, so a page still
+      # marked as a draft must not be published: the docs-revision PR replaces
+      # its "Draft" line with "*Released YYYY-MM-DD.*" before the tag.
+      - name: Release notes are final
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          notes="docs/release_notes/${GITHUB_REF_NAME#v}.md"
+          if [ -f "$notes" ] && grep -qiE '^\*draft' "$notes"; then
+            echo "::error::$notes is still marked as a draft; set its '*Released YYYY-MM-DD.*' line before releasing"
+            exit 1
+          fi
       - name: Build sdist and wheel
         run: |
           python -m pip install --upgrade pip build twine
