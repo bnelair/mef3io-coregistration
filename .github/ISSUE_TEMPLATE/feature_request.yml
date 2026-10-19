@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest an improvement or new capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: The use case, not just the proposed API.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to see. If it changes how results are saved, note that existing result files must keep loading.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part(s)
+      multiple: true
+      options: [Reading through a result, Alignment (Stage 1/2/3), Result format, Review report, Documentation]

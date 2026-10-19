@@ -5,29 +5,62 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mef3io-coregistration"
 dynamic = ["version"]
-description = "Read two MEF3 recordings as one through a saved coregistration (clock map)."
+description = "Align two MEF 3.0 (Multiscale Electrophysiology Format) recordings captured on independent, drifting clocks, such as EEG and iEEG from two systems, and read them as one recording on one clock"
 readme = "README.md"
+# 3.11+: the package uses datetime.UTC (3.11) throughout.
+requires-python = ">=3.11"
+# SPDX expression + license-files (PEP 639, setuptools >= 77); classifiers below
+# no longer carry the license.
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.11"
-authors = [{ name = "Filip Mivalt", email = "mivalt.filip@mayo.edu" }]
-dependencies = ["numpy>=1.24", "scipy>=1.10", "mef3io>=1.3.0,<2"]
+authors = [{ name = "Filip Mivalt" }]
+keywords = ["MEF", "MEF3", "MEF 3.0", "Multiscale Electrophysiology Format", "EEG", "iEEG", "SEEG", "ECoG", "electrophysiology", "neuroscience", "coregistration", "clock drift", "time alignment", "synchronization", "mef3io"]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+  "Typing :: Typed",
 ]
-
-[project.optional-dependencies]
-test = ["pytest>=8", "hypothesis>=6"]
-dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.16,<0.17", "build", "twine"]
-examples = ["matplotlib>=3.7"]
+# mef3io: every MEF 3.0 read (and the legacy mef_tools API the reader mirrors);
+# 1.3 is the first with the partial reads and path handling the reader needs.
+dependencies = ["numpy>=1.24", "scipy>=1.10", "mef3io>=1.3.0,<2"]
 
 [project.urls]
+Homepage = "https://bnelair.github.io/mef3io-coregistration/"
+Documentation = "https://bnelair.github.io/mef3io-coregistration/"
 Repository = "https://github.com/bnelair/mef3io-coregistration"
 Issues = "https://github.com/bnelair/mef3io-coregistration/issues"
 
+[project.optional-dependencies]
+# The plotted review report (`sigcoreg-review`, mef3io_coregistration.review).
+# matplotlib is never needed to align or to read.
+report = ["matplotlib>=3.7"]
+# The test suite: hypothesis for the property tests of the clock map and the
+# resampler; matplotlib because the review report is tested too.
+test = ["pytest>=8", "hypothesis>=6", "matplotlib>=3.7"]
+# The documentation site (mkdocs.yml): MkDocs Material, and mkdocstrings to
+# generate the API reference from the docstrings. CI's docs workflow installs
+# the same pins.
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9,<10", "mkdocstrings[python]>=0.24"]
+# Everything for development: the tests, the linter CI runs (ruff, pinned to
+# the minor version whose rules the code is clean under) and the release
+# build tools.
+dev = ["pytest>=8", "hypothesis>=6", "matplotlib>=3.7", "ruff>=0.16,<0.17", "build", "twine"]
+
+[project.scripts]
+sigcoreg-review = "mef3io_coregistration.review:main"
+
 [tool.setuptools.dynamic]
+# Single source of truth for the version: the repo-root VERSION file.
 version = { file = "VERSION" }
 
 [tool.setuptools.packages.find]
@@ -38,8 +71,10 @@ mef3io_coregistration = ["py.typed"]  # typed (PEP 561): type checkers use its a
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: fixture generation / long-running integration tests"]
 filterwarnings = ["ignore::UserWarning"]
 
+# Lint configuration for `ruff check .` (CI's lint job).
 [tool.ruff]
 line-length = 100
 target-version = "py311"

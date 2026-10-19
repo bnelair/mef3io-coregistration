@@ -164,6 +164,7 @@ class ClockMap:
 
     # -- persistence ------------------------------------------
     def to_dict(self) -> dict:
+        """The map as the JSON object :meth:`save` writes (integer uUTC knots)."""
         return {
             "format": _FORMAT,
             "format_version": _FORMAT_VERSION,
@@ -178,11 +179,12 @@ class ClockMap:
     def save(self, path: str | Path) -> Path:
         """Persist the map as JSON (integer anchors → bit-stable reload)."""
         path = Path(path)
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True))
+        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8", newline="\n")
         return path
 
     @classmethod
     def from_dict(cls, d: dict) -> ClockMap:
+        """Build a map from its JSON object; refuses anything that is not a clock map."""
         if d.get("format") != _FORMAT:
             raise ValueError(f"not a clock map file (format={d.get('format')!r})")
         return cls(
@@ -195,7 +197,8 @@ class ClockMap:
 
     @classmethod
     def load(cls, path: str | Path) -> ClockMap:
-        return cls.from_dict(json.loads(Path(path).read_text()))
+        """Read a map saved with :meth:`save`."""
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
 def _interp_extrap(

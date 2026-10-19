@@ -1,6 +1,11 @@
 """How to use a saved coregistration (.json) to read the two recordings as one.
 
-    python examples/use_coregistered_recording.py path/to/result.coreg.json
+    python examples/02_read_coregistered_recording.py path/to/result.coreg.json
+
+Needs your own result and the two recordings it names, and assumes both carry the channels
+``ch1`` and ``ch2`` (change ``CH1``/``CH2`` below for your data), with at least ~16 minutes of the
+moving recording. To make a result from synthetic data
+first, see ``01_align_synthetic_pair.py``.
 
 Walks through the Python API step by step, printing what each call returns, and saves a figure
 of the reads (``<result>_usage.png``). Each ``# %%`` block runs on its own in an IDE / Jupyter.
@@ -29,6 +34,8 @@ from mef3io_coregistration.reader import (
 )
 
 RESULT = Path(sys.argv[1] if len(sys.argv) > 1 else "result.coreg.json")
+CH1, CH2 = "ch1", "ch2"  # two channels present in both files
+BIP = f"{CH1}-{CH2}"  # a bipolar derivation of them
 
 
 def clock(t_uutc: float) -> str:
@@ -39,7 +46,7 @@ def clock(t_uutc: float) -> str:
 # %% 1 — open the result: the two MEF3 files + the clock map between them
 # The result names both files and which one is the reference (never resampled). It is only the
 # transformation: if the recordings have moved, pass where they are now —
-#     CoregisteredRecording.open(RESULT, file_a="/new/cadence.mefd", file_b="/new/natus.mefd")
+#     CoregisteredRecording.open(RESULT, file_a="/new/recording_a.mefd", file_b="/new/recording_b.mefd")
 # (without it, recordings missing from their stored paths are looked for next to the result).
 # Opening checks each file's start and end against the result's (within 1 s; verify=False to skip).
 rec = CoregisteredRecording.open(RESULT)
@@ -53,17 +60,17 @@ print(f"clock map covers {clock(d0)} → {clock(d1)} (reference clock)")
 # %% 1b — read ONE file like a MEF session, on the reference clock
 # Same calls as mef3io.Reader. Any channel of the file — the drift is the same for all of them.
 mov_s = CoregisteredSession(rd, file="moving")  # reuse the open files; or pass the result path
-lo, _ = mov_s.time_bounds("LTP1")
+lo, _ = mov_s.time_bounds(CH1)
 w0, w1 = lo + 900_000_000, lo + 902_000_000  # 2 s, 15 min in (reference-clock uUTC)
-x_uni = mov_s.read("LTP1", w0, w1)  # only this window is read from disk
-x_bip = mov_s.read("LTP1-LTP3", w0, w1)  # anode − cathode on the native samples, then resampled
-print(f"\nmef3io-style: {mov_s.path.split('/')[-1]} LTP1 {x_uni.size} samples at {mov_s.fs('LTP1'):g} Hz, "
-      f"LTP1-LTP3 {x_bip.size}; first sample at {clock(mov_s.times('LTP1', w0, w1)[0])} (reference clock)")
+x_uni = mov_s.read(CH1, w0, w1)  # only this window is read from disk
+x_bip = mov_s.read(BIP, w0, w1)  # anode − cathode on the native samples, then resampled
+print(f"\nmef3io-style: {Path(mov_s.path).name} {CH1} {x_uni.size} samples at {mov_s.fs(CH1):g} Hz, "
+      f"{BIP} {x_bip.size}; first sample at {clock(mov_s.times(CH1, w0, w1)[0])} (reference clock)")
 # …and the legacy mef_tools calls, unchanged apart from the constructor:
 mr = CoregisteredMefReader(RESULT, file="moving")  # was: MefReader(path)
-arrs = mr.get_data(["LTP1", "LTP3", "LTP1-LTP3"], w0, w1)
-print(f"mef_tools-style: get_data → {[a.shape for a in arrs]}, fsamp {mr.get_property('fsamp', 'LTP1')}, "
-      f"start_time on the reference clock {clock(mr.get_property('start_time', 'LTP1'))}")
+arrs = mr.get_data([CH1, CH2, BIP], w0, w1)
+print(f"mef_tools-style: get_data → {[a.shape for a in arrs]}, fsamp {mr.get_property('fsamp', CH1)}, "
+      f"start_time on the reference clock {clock(mr.get_property('start_time', CH1))}")
 mr.close()
 
 # %% 2 — the logical channels you get by default
@@ -88,33 +95,34 @@ print("  source", np.unique(sig.source, return_counts=True), " (1 = file A, 2 = 
 print("  extrapolated samples:", int(sig.extrapolated.sum()))
 
 # %% 4 — your own logical channel: montage per file, preferred file, fallback
-# Here: the bipolar LTP1 − LTP3 on both files, preferring the moving file (8 kHz Cadence) and
-# falling back to the reference (256 Hz Natus) outside it. Names and montage may differ per file:
+# Here: the bipolar ch1 − ch2 on both files, preferring the moving file and falling back to the
+# reference outside it. Names and montage may differ per file:
 # a=("LA1", None) on one side and b=("EEG LA1-Ref", "Fz") on the other works the same way.
-rec.set_channel("LTP1-3", a=("LTP1", "LTP3"), b=("LTP1", "LTP3"), prefer=mov)
+rec.set_channel(BIP, a=(CH1, CH2), b=(CH1, CH2), prefer=mov)
 
 # Before one file may fill the other's gaps, the two must agree (sign, gain, units):
-ag = rec.agreement("LTP1-3")
+ag = rec.agreement(BIP)
 print(f"\nagreement: {ag.status}  r={ag.corr:.2f}  gain B/A={ag.gain_b_over_a:.3g}  — {ag.message}")
 
-# They are recorded with opposite polarity and ~16x different gain, so the gap filling is refused
-# until you say how the two relate: a per-source scale (−1 inverts) and offset.
+# Two systems can record with opposite polarity or a different gain; then the gap filling is
+# refused until you say how the two relate: a per-source scale (−1 inverts) and offset.
+kw = {}  # the corrections applied (none when the sources already agree)
 if ag.status != "ok":
     g = ag.gain_b_over_a  # corrected B/A amplitude ratio
     scale = -1.0 if ag.status == "inverted" else 1.0
     kw = {f"scale_{mov.lower()}": scale * (g if mov == "A" else 1 / g) if np.isfinite(g) else scale}
-    rec.set_channel("LTP1-3", a=("LTP1", "LTP3"), b=("LTP1", "LTP3"), prefer=mov, **kw)
-    ag = rec.agreement("LTP1-3")
+    rec.set_channel(BIP, a=(CH1, CH2), b=(CH1, CH2), prefer=mov, **kw)
+    ag = rec.agreement(BIP)
     print(f"after correction {kw}: {ag.status}  r={ag.corr:.2f}  gain B/A={ag.gain_b_over_a:.3g}")
 
-# Offsets (offset_a / offset_b) exist for amplifiers with a FIXED DC difference. Not here: the
-# Cadence amplifier is DC-coupled — its baseline settles over the first ~10 s and then wanders by
-# hundreds of units — while Natus is AC-coupled, so no constant offset fits (the agreement's
-# offset_b_minus_a is only a whole-overlap median). The robust answer is §5: high-pass each run.
+# Offsets (offset_a / offset_b) exist for amplifiers with a FIXED DC difference. Between a
+# DC-coupled recorder (whose baseline wanders) and an AC-coupled clinical system no constant
+# offset fits (the agreement's offset_b_minus_a is only a whole-overlap median). The robust
+# answer is §5: high-pass each run.
 
 # %% 5 — read across the start of the moving recording: one continuous channel
-edge = rec.get_data("LTP1-3", mov_lo - 5_000_000, mov_lo + 5_000_000)  # ±5 s around the edge
-print(f"\nLTP1-3 across the edge: {edge.n} samples at {edge.fs:g} Hz"
+edge = rec.get_data(BIP, mov_lo - 5_000_000, mov_lo + 5_000_000)  # ±5 s around the edge
+print(f"\n{BIP} across the edge: {edge.n} samples at {edge.fs:g} Hz"
       + (f" — note: {edge.merge_note}" if edge.merge_note else ""))
 for src, a, b in edge.runs():  # stretches from ONE file — analyse each on its own
     print(f"  run: file {'?AB'[src]}  {clock(a)} → {clock(b)}")
@@ -132,7 +140,7 @@ for _src, a, b in edge.runs():
 # %% 6 — sample-aligned arrays for analysis (CoregisteredReader)
 # Read the reference natively and the moving file coregistered ONTO THE SAME GRID: same length,
 # same timestamps, so the two can be stacked, subtracted, correlated sample for sample.
-spec = ("LTP1", "LTP3")
+spec = (CH1, CH2)
 r_ref = rd.get_data(spec, t0, t0 + 10_000_000, file=ref)                 # native reference samples
 r_mov = rd.get_data(spec, t0, t0 + 10_000_000, file=mov, coregister=True)  # resampled onto them
 assert np.array_equal(r_ref.ts, r_mov.ts)
@@ -157,7 +165,7 @@ cfg = RESULT.with_name(RESULT.stem + "_recording.json")
 rec.save_config(cfg, result_path=RESULT)
 rec2 = CoregisteredRecording.from_config(cfg)
 print(f"\nsaved mapping → {cfg}; reopened: {len(rec2.channels)} channels, "
-      f"LTP1-3 prefers {rec2.channel('LTP1-3').prefer}")
+      f"{BIP} prefers {rec2.channel(BIP).prefer}")
 rec2.close()
 
 # %% 9 — a picture of what was read
@@ -175,7 +183,7 @@ try:
         axes[0].plot(s, np.where(edge.source == code, edge_hp, np.nan), color=c, lw=0.7,
                      label=f"{lab}, high-passed within its run")
     axes[0].axvline(0, color="k", ls=":")
-    axes[0].set_title("§5 LTP1−3 as one channel across the start of the moving file "
+    axes[0].set_title(f"§5 {BIP} as one channel across the start of the moving file "
                       "(colour = source file; faint = as read, with the DC step between systems)")
     axes[0].set_xlabel("s from the edge")
     axes[0].legend()
@@ -197,6 +205,6 @@ try:
     fig.savefig(png, dpi=120)
     print(f"\nfigure → {png}")
 except ImportError:
-    print("\n(install matplotlib for the figure: pip install -e '.[review]')")
+    print("\n(install matplotlib for the figure: pip install \"mef3io-coregistration[report]\")")
 
 rec.close()

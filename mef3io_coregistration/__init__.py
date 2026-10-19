@@ -1,8 +1,10 @@
-"""iEEG (and generic) signal coregistration.
+"""Coregistration of two MEF 3.0 recordings captured on independent, drifting clocks.
 
-Re-align two recordings captured on independent, drifting clocks onto one timeline.
-This package is the reader: it opens a saved coregistration result and reads the recordings
-through it, on the reference clock.
+The engine: it aligns the two recordings (:mod:`~mef3io_coregistration.session` and
+:mod:`~mef3io_coregistration.align`: a gross offset, sample-accurate anchors, the drift in
+between), saves the clock map with its provenance (:mod:`~mef3io_coregistration.result`), and
+reads either recording, or both as one, through a saved result on the reference clock
+(:mod:`~mef3io_coregistration.reader`). All MEF 3.0 access goes through mef3io.
 """
 
 from importlib.metadata import PackageNotFoundError, version

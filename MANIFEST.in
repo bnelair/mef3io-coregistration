@@ -1,4 +1,4 @@
-include VERSION LICENSE *.md
+include VERSION LICENSE *.md CITATION.cff
 recursive-include tests *.py
 graft examples
 global-exclude __pycache__ *.py[cod]

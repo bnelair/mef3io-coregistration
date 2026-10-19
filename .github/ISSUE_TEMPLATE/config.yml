@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://bnelair.github.io/mef3io-coregistration/
+    about: Install, how-to pages, the alignment methods, the result format and the Python API.

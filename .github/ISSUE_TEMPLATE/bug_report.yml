@@ -1,0 +1,60 @@
+name: Bug report
+description: Something is wrong, crashes, or an alignment is off
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please do **not** attach clinical or
+        subject-identifying data — a synthetic pair
+        (`mef3io_coregistration.synthetic`) or an anonymized session is
+        ideal for reproduction. A saved result JSON holds no signal, but it
+        does hold file paths: remove any that identify someone.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what happened instead?
+      placeholder: Stage 1 locked at +120 s but the overlay is off by ... / reading channel X over [t0, t1) returned ...
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The smallest snippet that shows the problem.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Full error / traceback
+      description: The complete message.
+      render: shell
+  - type: input
+    id: version
+    attributes:
+      label: mef3io-coregistration and mef3io versions
+      description: "`python -c \"import mef3io_coregistration, mef3io; print(mef3io_coregistration.__version__, mef3io.__version__)\"`"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options: [Reading through a result, Alignment (Stage 1/2/3), Review report, Installation, Other]
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS and Python version
+      placeholder: macOS 15 (arm64), Python 3.12
+    validations:
+      required: true
+  - type: input
+    id: recordings
+    attributes:
+      label: If specific recordings trigger it, what are they?
+      placeholder: two systems, sampling rates, durations, how far apart the clocks are ...

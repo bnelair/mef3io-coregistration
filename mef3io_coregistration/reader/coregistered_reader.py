@@ -8,8 +8,8 @@ Three access modes:
 * **default coregistered** — read the *moving* file with ``coregister=True``: its signal is
   band-limited resampled onto a grid on the **reference clock**; query times are in the
   reference clock domain. If the reference file carries the same channel, that
-  channel's own grid is used (sample-for-sample overlay); otherwise — e.g. the clinical montage
-  the cadence system does not record — the grid is the moving signal's own rate, anchored at its
+  channel's own grid is used (sample-for-sample overlay); otherwise — e.g. a clinical channel
+  the second recorder does not record — the grid is the moving signal's own rate, anchored at its
   mapped first sample so consecutive reads tile exactly. ``fs=`` or an explicit reference-clock
   ``grid=`` override either.
 * **force raw — reference** — ``coregister=False`` (or reading the reference file with

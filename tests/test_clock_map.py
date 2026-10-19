@@ -111,12 +111,12 @@ def test_save_load_is_bit_stable(tmp_path):
     assert reloaded.interp_method == "pchip"
     # Re-saving the reloaded map yields byte-identical bytes.
     again = reloaded.save(tmp_path / "map2.json")
-    assert path.read_text() == again.read_text()
+    assert path.read_text(encoding="utf-8") == again.read_text(encoding="utf-8")
 
 
 def test_rejects_foreign_file(tmp_path):
     p = tmp_path / "foreign.json"
-    p.write_text('{"format": "something_else"}')
+    p.write_text('{"format": "something_else"}', encoding="utf-8")
     with pytest.raises(ValueError, match="not a clock map"):
         ClockMap.load(p)
 

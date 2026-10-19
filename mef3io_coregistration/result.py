@@ -1,7 +1,7 @@
 """Serializable coregistration result.
 
 Part of the reader core: loading a result needs only this module and the clock map — never the
-alignment pipeline or the console.
+alignment pipeline or any front end.
 
 The saved clock map plus full provenance: the two files and which is the reference (A/B
 roles), the channels and filters used per file, anchors, the drift estimate, a QC report,
@@ -45,12 +45,15 @@ class CoregResult:
     moving_file: str
     stage_channels: dict = field(default_factory=dict)  # {stage: {"reference": lbl, "moving": lbl}}
     anchors: list[Anchor] = field(default_factory=list)
-    drift: dict | None = None  # {window_s, grid_s, t_ref_uutc[], offset_s[], confidence[], accepted[]}
+    # {window_s, grid_s, t_ref_uutc[], offset_s[], smoothed_offset_s[], confidence[], accepted[],
+    #  gapped[], measured_span_uutc}
+    drift: dict | None = None
     created_utc: str = ""
     tool_version: str = __version__
     reference_role: str = "A"  # which of file A / file B is the reference
-    stage_filters: dict = field(default_factory=dict)  # {stage: {"reference": [..], "moving": [..]}}
-    qc: dict | None = None  # QC report: verification, residuals, extrapolation
+    # {"gross": filters, "fine": [{"t_ref_uutc": t, "filters": filters}, ...], "drift": filters}
+    stage_filters: dict = field(default_factory=dict)
+    qc: dict | None = None  # QC report: map_verified, verification, stage1_accepted_by, ...
     file_fingerprints: dict = field(default_factory=dict)  # {"A": fingerprint, "B": fingerprint}
 
     def __post_init__(self) -> None:
@@ -61,14 +64,17 @@ class CoregResult:
 
     @property
     def file_a(self) -> str:
+        """File A's path as stored (the reference when ``reference_role == "A"``)."""
         return self.reference_file if self.reference_role == "A" else self.moving_file
 
     @property
     def file_b(self) -> str:
+        """File B's path as stored."""
         return self.moving_file if self.reference_role == "A" else self.reference_file
 
     # -- persistence ------------------------------------------
     def to_dict(self) -> dict:
+        """The result as the JSON object :meth:`save` writes (see the result format guide)."""
         return {
             "format": _FORMAT,
             "format_version": _FORMAT_VERSION,
@@ -97,12 +103,14 @@ class CoregResult:
         }
 
     def save(self, path: str | Path) -> Path:
+        """Write the result as sorted-key JSON; returns ``path``. Re-saving is byte-stable."""
         path = Path(path)
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True))
+        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8", newline="\n")
         return path
 
     @classmethod
     def from_dict(cls, d: dict) -> CoregResult:
+        """Build a result from its JSON object; refuses anything that is not a result."""
         if d.get("format") != _FORMAT:
             raise ValueError(f"not a coreg result file (format={d.get('format')!r})")
         anchors = [
@@ -131,4 +139,5 @@ class CoregResult:
 
     @classmethod
     def load(cls, path: str | Path) -> CoregResult:
-        return cls.from_dict(json.loads(Path(path).read_text()))
+        """Read a result saved with :meth:`save` (any earlier format version too)."""
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))

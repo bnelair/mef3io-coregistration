@@ -13,13 +13,13 @@ Two views of ONE file, so existing MEF code needs only a different constructor:
     from mef3io_coregistration.reader import CoregisteredSession, CoregisteredMefReader
 
     with CoregisteredSession("result.json", file="moving") as r:   # or "A" / "B" / "reference"
-        x = r.read("LTP1", t0, t1)            # any channel of that file, reference-clock uUTC
-        y = r.read("LTP1-LTP3", t0, t1)       # bipolar: subtracted natively, then resampled
-        ts = r.times("LTP1", t0, t1)          # the uUTC of each returned sample
+        x = r.read("ch1", t0, t1)            # any channel of that file, reference-clock uUTC
+        y = r.read("ch1-ch2", t0, t1)       # bipolar: subtracted natively, then resampled
+        ts = r.times("ch1", t0, t1)          # the uUTC of each returned sample
 
     mr = CoregisteredMefReader("result.json", file="moving")
-    x = mr.get_data("LTP1", t0, t1)           # ndarray;  a list of channels → list of arrays
-    fs = mr.get_property("fsamp", "LTP1")
+    x = mr.get_data("ch1", t0, t1)           # ndarray;  a list of channels → list of arrays
+    fs = mr.get_property("fsamp", "ch1")
 
 Times in and out are **reference-clock uUTC** for both files. The reference file is read as is
 (its own samples, exactly as ``mef3io`` returns them). The moving file is read over only the
@@ -295,7 +295,7 @@ class CoregisteredMefReader:
     def get_data(self, channels, t_stamp1=None, t_stamp2=None):
         """Physical-unit data of ``channels`` over ``[t_stamp1, t_stamp2)`` (reference-clock
         uUTC): an array for one channel, a list of arrays for a list. Channels may be bipolar
-        (``"LTP1-LTP3"``)."""
+        (``"ch1-ch2"``)."""
         t1 = None if t_stamp1 is None else int(t_stamp1)
         t2 = None if t_stamp2 is None else int(t_stamp2)
         if isinstance(channels, (list, np.ndarray)):

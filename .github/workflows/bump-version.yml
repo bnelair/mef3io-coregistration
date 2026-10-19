@@ -1,7 +1,10 @@
 name: bump-version
 
-# Manual release trigger: bumps VERSION (the single source of truth), commits, tags vX.Y.Z and
-# starts the release workflow on that tag.
+# Manual release trigger: bumps the repo-root VERSION file (the single source
+# of truth for the package version), commits, tags vX.Y.Z, and dispatches the
+# release workflow on that tag. Run it from main. An explicit version equal to
+# VERSION releases the current commit as it is (no bump commit), and a
+# pre-release (1.2.0rc1) followed by "patch" releases 1.2.0.
 on:
   workflow_dispatch:
     inputs:
@@ -60,8 +63,8 @@ jobs:
           git tag "v$new"
           git push --atomic origin "HEAD:${{ github.ref_name }}" "refs/tags/v$new"
 
-      # Tags pushed with GITHUB_TOKEN do not trigger push events, so start the release run on
-      # the new tag explicitly.
+      # Tags pushed with GITHUB_TOKEN do not trigger push events (recursion
+      # guard), so start the release run on the new tag explicitly.
       - name: Dispatch release workflow
         env:
           GH_TOKEN: ${{ github.token }}
