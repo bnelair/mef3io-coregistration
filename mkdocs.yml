@@ -1,0 +1,90 @@
+site_name: mef3io-coregistration
+site_description: Align two MEF 3.0 (Multiscale Electrophysiology Format) recordings captured on independent, drifting clocks, such as EEG and iEEG from two systems, and read them as one recording on one clock, in Python - built on mef3io
+site_url: https://bnelair.github.io/mef3io-coregistration/
+repo_url: https://github.com/bnelair/mef3io-coregistration
+repo_name: bnelair/mef3io-coregistration
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle: { icon: material/brightness-7, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle: { icon: material/brightness-4, name: Light mode }
+
+markdown_extensions:
+  - admonition
+  - attr_list        # enables the { .md-button } link attributes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.snippets:   # lets docs pages include repo-root markdown (CONTRIBUTORS.md)
+      base_path: ["."]
+      check_paths: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: numpy
+            show_source: false
+            show_root_heading: true
+            heading_level: 2
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            merge_init_into_class: true
+            filters: ["!^_"]
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: install.md
+      - Examples: examples.md
+  - How-to:
+      - Read a coregistration in Python: howto/read_python.md
+      - Align two recordings in Python: howto/align_python.md
+      - Open a result from a pipeline: howto/pipeline.md
+      - Review a coregistration: howto/review_report.md
+  - Guides:
+      - Methods: methods.md
+      - Result format: result_format.md
+  - API reference:
+      - Python: api/python.md
+  - Release notes:
+      - All releases: release_notes/index.md
+      - "0.3.0": release_notes/0.3.0.md
+  - Development:
+      - Design & internals: design.md
+      - Versioning & releases: releasing.md
+  - Contributors and credits: contributors.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bnelair/mef3io-coregistration
+      name: mef3io-coregistration on GitHub
+    - icon: material/file-document-outline
+      link: https://github.com/bnelair/mef3io
+      name: mef3io, MEF 3.0 read and write for Python, MATLAB and C++
+    - icon: material/application-outline
+      link: https://github.com/bnelair/mef3io-studio
+      name: mef3io-studio, a desktop app for MEF 3.0 recordings
+    - icon: material/server-network
+      link: https://github.com/bnelair/mef3io-server
+      name: mef3io-server, streams MEF 3.0 data to viewers

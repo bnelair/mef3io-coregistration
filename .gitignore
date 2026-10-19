@@ -1,10 +1,21 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
 build/
 dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
 .pytest_cache/
+.ruff_cache/
+.hypothesis/
 .venv/
 venv/
-/data/
+.idea/
 .DS_Store
+site/
+# generated synthetic recordings and local data (SIGCOREG_DATA_DIR defaults here)
+/data/
+# local scratch
+tmp/
+
+# agent worktrees and local Claude Code state
+.claude/worktrees/
+.claude/settings.local.json

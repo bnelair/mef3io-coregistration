@@ -1,11 +1,35 @@
-# mef3io-coregistration — the reader
+# mef3io-coregistration
 
-Read two MEF3 recordings that were coregistered (aligned onto one clock) as if they were one
-recording. This package is only the reader: it opens a
-saved coregistration result (`*.coreg.json`) and reads the recordings through it. Results are made with
-the BNEL coregistration console, which is not part of this package.
+Align two **MEF 3.0** recordings of the same subject that were captured on
+**independent, drifting clocks** (for example a clinical EEG system and a
+second, implanted or research system), and read them as **one recording on
+one clock**. It finds the offset between the two clocks and how it drifts
+over the recording, saves that as a small JSON result, and then reads either
+file, or both together, through it: every time you pass in or get back is on
+the reference recording's clock. It is built on
+[mef3io](https://github.com/bnelair/mef3io).
 
-Dependencies: numpy, scipy, [mef3io](https://pypi.org/project/mef3io/). Python ≥ 3.11.
+[![PyPI](https://img.shields.io/pypi/v/mef3io-coregistration)](https://pypi.org/project/mef3io-coregistration/)
+[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fbnelair%2Fmef3io-coregistration%2Fmain%2Fpyproject.toml)](https://pypi.org/project/mef3io-coregistration/)
+[![CI](https://img.shields.io/github/actions/workflow/status/bnelair/mef3io-coregistration/ci.yml?branch=main&label=CI)](https://github.com/bnelair/mef3io-coregistration/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/github/actions/workflow/status/bnelair/mef3io-coregistration/docs.yml?branch=main&label=docs)](https://bnelair.github.io/mef3io-coregistration/)
+[![License](https://img.shields.io/github/license/bnelair/mef3io-coregistration)](https://github.com/bnelair/mef3io-coregistration/blob/main/LICENSE)
+
+**Documentation: <https://bnelair.github.io/mef3io-coregistration/>**
+
+## Two recordings, two clocks
+
+When two systems record the same subject at the same time, their clocks do
+not agree: one can be minutes off, and the difference changes by seconds over
+a day. An event at 10:00:00 in one file is not at 10:00:00 in the other.
+mef3io-coregistration measures that difference from the signals themselves,
+in three stages: a **gross** offset over the whole recording, a **fine**,
+sample-accurate offset at chosen places, and the **drift** in between. The
+result is a monotone **clock map** from the reference recording's clock to
+the other ("moving") recording's clock, plus a record of how it was made and
+how well it is supported. The recordings themselves are never changed or
+copied. The [Methods](https://bnelair.github.io/mef3io-coregistration/methods/)
+guide explains each stage and every number it reports.
 
 ## Install
 
@@ -13,71 +37,155 @@ Dependencies: numpy, scipy, [mef3io](https://pypi.org/project/mef3io/). Python �
 pip install mef3io-coregistration
 ```
 
-Development: see [CONTRIBUTING.md](CONTRIBUTING.md). Releases: see [RELEASING.md](RELEASING.md).
+Python 3.11+; depends on numpy, scipy and
+[mef3io](https://pypi.org/project/mef3io/). The plotted review report needs
+matplotlib: `pip install "mef3io-coregistration[report]"`. Details:
+[Install](https://bnelair.github.io/mef3io-coregistration/install/).
 
-## The idea
+## Usage
 
-A coregistration result is only the **transformation** between the two recordings' clocks — a
-clock map from the reference recording's time to the other ("moving") recording's time. The
-recordings themselves stay where they are, and can be moved or shared: pass their current paths
-when opening. Everything you read comes out on the **reference clock**, in absolute uUTC
-(microseconds since the epoch, as MEF3 stores time). The drift is a property of the two recording
-systems, so one map serves every channel of either file.
+Align two recordings and save the result:
 
-## Read either file like a MEF session
+```python
+from mef3io_coregistration.session import CoregSession
+
+with CoregSession() as sess:
+    sess.open("system_a.mefd", "system_b.mefd", reference="A")
+    sess.set_channels("gross", "C3")          # the channel to align on, in both files
+    sess.set_channels("fine", "C3")
+    gross = sess.run_gross()                  # Stage 1: offset over the whole recording
+    print(gross.offset_s, gross.locked)
+    sess.run_fine(t_roi)                      # Stage 2: a sample-accurate anchor at t_roi (uUTC)
+    sess.run_drift()                          # Stage 3: the drift everywhere
+    sess.result().save("pair.coreg.json")
+```
+
+Read either file like a `mef3io.Reader`, with every time on the reference
+clock:
 
 ```python
 from mef3io_coregistration.reader import CoregisteredSession
 
-with CoregisteredSession("patient.coreg.json", file="moving",          # or "reference", "A", "B"
-                         file_a="/data/cadence.mefd", file_b="/data/natus.mefd") as r:
-    r.channels                              # this file's channels
-    x = r.read("LTP1", t0, t1)              # [t0, t1) reference-clock uUTC → float64, NaN in gaps
-    y = r.read("LTP1-LTP3", t0, t1)         # bipolar: subtracted on the native samples, then resampled
-    ts = r.times("LTP1", t0, t1)            # the uUTC of each sample
-    r.info("LTP1")                          # metadata; start/end on the reference clock
-    r.records()                             # annotations: times on the reference clock, durations on the file's
+with CoregisteredSession("pair.coreg.json", file="B") as r:   # or "A", "reference", "moving"
+    x = r.read("C3", t0, t1)          # [t0, t1) in reference-clock uUTC; float64, NaN in gaps
+    y = r.read("C3-C4", t0, t1)       # bipolar: subtracted on the file's own samples, then resampled
+    ts = r.times("C3", t0, t1)        # the reference-clock time of each sample
 ```
 
-Same calls as `mef3io.Reader`. Reads fetch only the window asked for. The moving file comes back
-at its own sampling rate (`fs=` to choose another), on a uniform grid on the reference clock;
-consecutive reads tile. The reference file comes back exactly as mef3io returns it.
-
-Code written for the legacy `mef_tools` `MefReader` works with one changed line:
-
-```python
-from mef3io_coregistration.reader import CoregisteredMefReader
-
-mr = CoregisteredMefReader("patient.coreg.json", file="moving")   # was: MefReader(path, password2=…)
-x = mr.get_data(["LTP1", "LTP1-LTP3"], t0, t1)
-fs = mr.get_property("fsamp", "LTP1")
-```
-
-## Both files as one recording
+Or both files as one recording, each channel served from a preferred file and
+filled from the other where it has no data:
 
 ```python
 from mef3io_coregistration.reader import CoregisteredRecording
 
-rec = CoregisteredRecording.open("patient.coreg.json")            # or .from_config("mapping.json")
-rec.set_channel("LTP1-3", a=("LTP1", "LTP3"), b=("LTP1", "LTP3"), prefer="A", scale_a=-0.06)
-sig = rec.get_data("LTP1-3", t0, t1)     # the preferred file where it has data, the other elsewhere
-sig.data, sig.ts, sig.source             # source: 1 = file A, 2 = file B, 0 = no data
-sig.runs()                               # single-file stretches — analyse (and filter) each on its own
-rec.agreement("LTP1-3")                  # do the two sources agree (sign, gain, units)?
-rec.to_file_time(t_ref, "A")             # event times between the clocks
+with CoregisteredRecording.open("pair.coreg.json") as rec:
+    rec.set_channel("C3", a="C3", b="C3", prefer="B")
+    sig = rec.get_data("C3", t0, t1)
+    sig.data, sig.ts, sig.source      # source per sample: 1 = file A, 2 = file B, 0 = no data
 ```
 
-A gap is only filled from the other file when the two sources agree over their overlap; set a
-per-source `scale_*`/`offset_*` to make them agree, or `allow_mismatch=True` to override.
+Times are microseconds since the Unix epoch (uUTC), as MEF 3.0 stores them.
+More: a runnable
+[end-to-end example](https://github.com/bnelair/mef3io-coregistration/blob/main/examples/01_align_synthetic_pair.py)
+that needs no data of your own, the
+[examples](https://bnelair.github.io/mef3io-coregistration/examples/), and
+short how-to pages such as
+[reading a coregistration in Python](https://bnelair.github.io/mef3io-coregistration/howto/read_python/).
 
-## Moved, shared, encrypted
+## What it is built for
 
-* `file_a=` / `file_b=` override the recordings' stored paths. Without them, a recording that is not
-  at its stored path is looked for next to the result file (`.mefd` or `.mefd.tar`).
-* A mapping saved next to its result (the console's *Download result* and *Download mapping*)
-  reopens from that folder: `CoregisteredRecording.from_config("mapping.json")`.
-* Each recording is checked only by its time span: its start and end must be within 1 s of the
-  ones saved in the result. Paths, channels, rates and signal do not matter — you assign the two
-  files, so a moved, downsampled or re-exported copy passes, and a recording with another span is
-  refused with both spans in the message (`verify=False` to override).
-* `password_a=` / `password_b=` open encrypted sessions.
+- **Clocks that drift, not just differ.** The map follows the offset as it
+  changes over the recording, to a fraction of a sample where the signals
+  share structure, and marks where it is measured and where it is held
+  beyond the data
+  ([Methods](https://bnelair.github.io/mef3io-coregistration/methods/)).
+- **Two systems that see the signal differently.** Different sampling rates,
+  gains, polarity, references and channel names are expected. The channel to
+  align on is chosen per file, and the signals are filtered and scaled before
+  any correlation so that one amplifier's baseline cannot dominate.
+- **Answers that say when they are unsure.** Stage 1 locks only when
+  independent stretches of the recording agree on the same offset; an offset
+  placed by hand is checked the same way; the saved result records what was
+  verified, who accepted it, and how much of the map is extrapolated.
+- **Existing MEF code.** `CoregisteredSession` has the `mef3io.Reader` calls
+  and `CoregisteredMefReader` the legacy `mef_tools` `MefReader` calls, so
+  existing analysis code needs only a different constructor.
+- **Recordings far larger than memory.** Reads fetch only the window asked
+  for; the alignment works on a decimated copy loaded in chunks.
+- **A result that travels.** The result is a small JSON file, separate from
+  the recordings. Recordings that were moved or shared are passed by their
+  new paths, and each is matched to its role by its start and end time
+  ([open a result from a pipeline](https://bnelair.github.io/mef3io-coregistration/howto/pipeline/);
+  the [result format](https://bnelair.github.io/mef3io-coregistration/result_format/)).
+- **Review before trust.** `sigcoreg-review result.json` writes a plotted
+  report, from the whole recording down to single samples
+  ([review report](https://bnelair.github.io/mef3io-coregistration/howto/review_report/)).
+
+## Scope and limitations
+
+- **Two recordings per result.** A result maps one moving recording onto one
+  reference recording; more systems need one result per pair.
+- **Shared signal is required.** The clocks are found from the signals, so
+  the two recordings must overlap in time and share at least one channel of
+  the same physiology (or a common artifact). Where the signals share little,
+  a stage reports that it did not lock instead of guessing.
+- **The map is one function of time.** It assumes one clock relation for all
+  channels of a file, and a smooth, monotone drift; a clock that jumps during
+  the recording needs one result per stretch.
+- **Files are matched by time span only.** A file passes when its start and
+  end are within 1 s of the ones stored in the result; two recordings with
+  the same span cannot be told apart.
+- **Reading, not writing.** Coregistered reads return arrays; writing an
+  aligned copy as a new MEF 3.0 session is left to the caller (with mef3io).
+
+## Contributing and support
+
+Bug reports, feature requests and questions go to
+[issues](https://github.com/bnelair/mef3io-coregistration/issues). To build
+and test from source, see
+[CONTRIBUTING.md](https://github.com/bnelair/mef3io-coregistration/blob/main/CONTRIBUTING.md);
+the [design](https://bnelair.github.io/mef3io-coregistration/design/) is on the
+documentation site. Report vulnerabilities privately as described in
+[SECURITY.md](https://github.com/bnelair/mef3io-coregistration/blob/main/SECURITY.md).
+
+```
+mef3io_coregistration/   the Python package
+  reader/                read one file or both through a saved result
+  align/                 Stage 1 gross, Stage 2 fine, Stage 3 drift
+  session/               CoregSession: runs the stages, produces the result
+  transform/             the clock map and resampling onto the reference clock
+  io/, montage/          MEF 3.0 access over mef3io, derived signals, channel specs
+  synthetic/             synthetic recording pairs with a known clock offset
+  review/                the plotted review report (sigcoreg-review)
+examples/                runnable scripts
+tests/                   pytest suite
+benchmarks/              performance checks on day-long synthetic recordings
+docs/                    documentation site source
+```
+
+## Related projects
+
+- [mef3io](https://github.com/bnelair/mef3io): MEF 3.0 reading and writing
+  for Python, MATLAB and C++, which this package reads through.
+- [mef3io-studio](https://github.com/bnelair/mef3io-studio): a desktop app for
+  exploring and anonymizing MEF 3.0 recordings.
+- [mef3io-server](https://github.com/bnelair/mef3io-server): a gRPC server
+  that streams MEF 3.0 data to viewers on a local network.
+
+## Citing and license
+
+If you use mef3io-coregistration in published work, please cite it via
+[CITATION.cff](https://github.com/bnelair/mef3io-coregistration/blob/main/CITATION.cff).
+Licensed under [Apache 2.0](https://github.com/bnelair/mef3io-coregistration/blob/main/LICENSE).
+Maintained by Filip Mivalt, Bioelectronics Neurophysiology and Engineering
+Laboratory (BNEL) at Mayo Clinic.
+
+## Contributors and credits
+
+**mef3io-coregistration:** Filip Mivalt (maintainer). It reads MEF 3.0
+through [mef3io](https://github.com/bnelair/mef3io) and builds on the work of
+everyone credited there. See
+[CONTRIBUTORS.md](https://github.com/bnelair/mef3io-coregistration/blob/main/CONTRIBUTORS.md).
+
+This project follows a
+[code of conduct](https://github.com/bnelair/mef3io-coregistration/blob/main/CODE_OF_CONDUCT.md).

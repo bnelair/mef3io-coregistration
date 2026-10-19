@@ -1,6 +1,10 @@
 """How to use a saved coregistration (.json) to read the two recordings as one.
 
-    python examples/use_coregistered_recording.py path/to/result.coreg.json
+    python examples/02_read_coregistered_recording.py path/to/result.coreg.json
+
+Needs your own result and the two recordings it names, and assumes they carry the channels
+``LTP1`` and ``LTP3`` (change the names for your data). To make a result from synthetic data
+first, see ``01_align_synthetic_pair.py``.
 
 Walks through the Python API step by step, printing what each call returns, and saves a figure
 of the reads (``<result>_usage.png``). Each ``# %%`` block runs on its own in an IDE / Jupyter.
@@ -197,6 +201,6 @@ try:
     fig.savefig(png, dpi=120)
     print(f"\nfigure → {png}")
 except ImportError:
-    print("\n(install matplotlib for the figure: pip install -e '.[review]')")
+    print("\n(install matplotlib for the figure: pip install \"mef3io-coregistration[report]\")")
 
 rec.close()

@@ -1,0 +1,56 @@
+cff-version: 1.2.0
+title: "mef3io-coregistration: alignment of two MEF 3.0 (Multiscale Electrophysiology Format) recordings captured on independent, drifting clocks"
+abstract: "mef3io-coregistration aligns two MEF 3.0 (Multiscale Electrophysiology Format) recordings of the same subject that were captured on independent, drifting clocks, such as a clinical EEG system and an implanted or research system. It estimates the clock offset from the signals in three stages (a gross offset over the whole recording, sample-accurate anchors, and the drift in between), saves a monotone clock map with its provenance and quality checks as JSON, and reads either recording, or both as one, on the reference clock. It is built on mef3io."
+message: "If you use mef3io-coregistration in research, please cite it."
+type: software
+authors:
+  - family-names: "Mivalt"
+    given-names: "Filip"
+    affiliation: "Bioelectronics Neurophysiology and Engineering Laboratory (BNEL), Mayo Clinic"
+references:
+  - type: software
+    title: "mef3io"
+    authors:
+      - family-names: "Mivalt"
+        given-names: "Filip"
+      - family-names: "Sladky"
+        given-names: "Vladimir"
+      - family-names: "Křemen"
+        given-names: "Václav"
+    repository-code: "https://github.com/bnelair/mef3io"
+    url: "https://bnelair.github.io/mef3io/"
+  - type: article
+    title: "Large-scale electrophysiology: acquisition, compression, encryption, and storage of big data"
+    authors:
+      - family-names: "Brinkmann"
+        given-names: "Benjamin H."
+      - family-names: "Bower"
+        given-names: "Mark R."
+      - family-names: "Stengel"
+        given-names: "Keith A."
+      - family-names: "Worrell"
+        given-names: "Gregory A."
+      - family-names: "Stead"
+        given-names: "Matt"
+    journal: "Journal of Neuroscience Methods"
+    volume: 180
+    issue: 1
+    start: 185
+    end: 192
+    year: 2009
+    doi: "10.1016/j.jneumeth.2009.03.022"
+repository-code: "https://github.com/bnelair/mef3io-coregistration"
+url: "https://bnelair.github.io/mef3io-coregistration/"
+license: Apache-2.0
+keywords:
+  - MEF
+  - MEF 3.0
+  - Multiscale Electrophysiology Format
+  - electrophysiology
+  - EEG
+  - iEEG
+  - coregistration
+  - clock drift
+  - time alignment
+  - synchronization
+  - time series

@@ -1,9 +1,22 @@
-"""Fixtures for the reader's own tests (self-contained: numpy, mef3io and the reader only)."""
+"""Shared pytest fixtures.
+
+``shared_data_dir`` points at the persistent fixture folder (``config.SYNTHETIC_DIR``; override
+with ``SIGCOREG_DATA_DIR``): tests that use it reuse cached synthetic MEF3 recordings across runs,
+regenerated only when the harness version or parameters change.
+"""
 from __future__ import annotations
 
 import numpy as np
 import pytest
 from mef3io.compat import MefWriter
+
+from mef3io_coregistration.config import SYNTHETIC_DIR
+
+
+@pytest.fixture(scope="session")
+def shared_data_dir():
+    SYNTHETIC_DIR.mkdir(parents=True, exist_ok=True)
+    return SYNTHETIC_DIR
 
 
 @pytest.fixture

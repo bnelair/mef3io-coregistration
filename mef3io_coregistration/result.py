@@ -1,7 +1,7 @@
 """Serializable coregistration result.
 
 Part of the reader core: loading a result needs only this module and the clock map — never the
-alignment pipeline or the console.
+alignment pipeline or any front end.
 
 The saved clock map plus full provenance: the two files and which is the reference (A/B
 roles), the channels and filters used per file, anchors, the drift estimate, a QC report,
@@ -61,14 +61,17 @@ class CoregResult:
 
     @property
     def file_a(self) -> str:
+        """File A's path as stored (the reference when ``reference_role == "A"``)."""
         return self.reference_file if self.reference_role == "A" else self.moving_file
 
     @property
     def file_b(self) -> str:
+        """File B's path as stored."""
         return self.moving_file if self.reference_role == "A" else self.reference_file
 
     # -- persistence ------------------------------------------
     def to_dict(self) -> dict:
+        """The result as the JSON object :meth:`save` writes (see the result format guide)."""
         return {
             "format": _FORMAT,
             "format_version": _FORMAT_VERSION,
@@ -97,12 +100,14 @@ class CoregResult:
         }
 
     def save(self, path: str | Path) -> Path:
+        """Write the result as sorted-key JSON; returns ``path``. Re-saving is byte-stable."""
         path = Path(path)
         path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True))
         return path
 
     @classmethod
     def from_dict(cls, d: dict) -> CoregResult:
+        """Build a result from its JSON object; refuses anything that is not a result."""
         if d.get("format") != _FORMAT:
             raise ValueError(f"not a coreg result file (format={d.get('format')!r})")
         anchors = [
@@ -131,4 +136,5 @@ class CoregResult:
 
     @classmethod
     def load(cls, path: str | Path) -> CoregResult:
+        """Read a result saved with :meth:`save` (any earlier format version too)."""
         return cls.from_dict(json.loads(Path(path).read_text()))

@@ -1,0 +1,33 @@
+# mef3io-coregistration
+
+> mef3io-coregistration aligns two MEF 3.0 (Multiscale Electrophysiology Format) recordings of the same subject that were captured on independent, drifting clocks, such as a clinical EEG system and an implanted or research system, and reads them as one recording on one clock. It estimates the clock offset from the signals in three stages (a gross offset over the whole recording, sample-accurate anchors, and the drift in between), saves a monotone clock map with its provenance and quality checks as JSON, and reads either file, or both as one, on the reference clock. It is built on mef3io.
+
+Install: `pip install mef3io-coregistration` (Python 3.11+; numpy, scipy, mef3io; `[report]` adds matplotlib for the review report). Times are microseconds since the Unix epoch (uUTC); the offset is `t_moving - t_reference`. Align: `mef3io_coregistration.session.CoregSession` (`open`, `set_channels`, `run_gross`, `run_fine`, `run_drift`, `result().save(path)`). Read: `mef3io_coregistration.reader.CoregisteredSession(result, file="B")` (the mef3io.Reader calls), `CoregisteredMefReader` (the legacy mef_tools MefReader calls), `CoregisteredRecording.open(result)` (both files as one). Recordings are passed by `file_a=`/`file_b=` and matched to a result only by start/end time (within 1 s). Apache-2.0.
+
+## Docs
+
+- [Overview](https://bnelair.github.io/mef3io-coregistration/): what it is, scope and limitations
+- [Install](https://bnelair.github.io/mef3io-coregistration/install/): pip, extras, development install
+- [Examples](https://bnelair.github.io/mef3io-coregistration/examples/): runnable scripts, one self-contained on synthetic data
+- [Python API](https://bnelair.github.io/mef3io-coregistration/api/python/): the reference, generated from the docstrings
+
+## How-to
+
+- [Read a coregistration in Python](https://bnelair.github.io/mef3io-coregistration/howto/read_python/): one file on the reference clock, both files as one, event times between the clocks, sample-aligned arrays
+- [Align two recordings in Python](https://bnelair.github.io/mef3io-coregistration/howto/align_python/): CoregSession from two .mefd paths to a saved result; what to do when a stage does not lock
+- [Open a result from a pipeline](https://bnelair.github.io/mef3io-coregistration/howto/pipeline/): passing the recordings' current paths, matching by time span, swapped files, saved channel mappings
+- [Review a coregistration](https://bnelair.github.io/mef3io-coregistration/howto/review_report/): sigcoreg-review and its figures
+
+## Reference
+
+- [Methods](https://bnelair.github.io/mef3io-coregistration/methods/): what each stage computes, the numbers it reports, the decision rules, failure modes
+- [Result format](https://bnelair.github.io/mef3io-coregistration/result_format/): the result, clock map and recording-mapping JSON, field by field
+- [Design](https://bnelair.github.io/mef3io-coregistration/design/): layers and invariants
+- [Release notes](https://bnelair.github.io/mef3io-coregistration/release_notes/): changes and upgrade notes per version
+
+## Optional
+
+- [Source code](https://github.com/bnelair/mef3io-coregistration)
+- [mef3io](https://github.com/bnelair/mef3io): MEF 3.0 read and write for Python, MATLAB and C++ ([docs](https://bnelair.github.io/mef3io/))
+- [mef3io-studio](https://github.com/bnelair/mef3io-studio): desktop app for exploring and anonymizing MEF 3.0 recordings
+- [mef3io-server](https://github.com/bnelair/mef3io-server): gRPC server streaming MEF 3.0 data to viewers on a local network
