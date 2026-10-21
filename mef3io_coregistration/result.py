@@ -115,11 +115,17 @@ class CoregResult:
         return dumps(self.to_dict(), compress=compress)
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> CoregResult:
-        """A result from the bytes of a saved file, plain or gzip-compressed (an upload)."""
-        from .io.jsonfile import loads
+    def from_bytes(cls, data: bytes, max_bytes: int | None = None) -> CoregResult:
+        """A result from the bytes of a saved file, plain or gzip-compressed (an upload).
+        Decompression stops at ``max_bytes`` (default 1 GiB); a front end should also cap the
+        size of the upload itself. Raises :class:`ValueError` for anything that is not a result."""
+        from .io.jsonfile import MAX_BYTES, loads
 
-        return cls.from_dict(loads(data))
+        doc = loads(data, MAX_BYTES if max_bytes is None else max_bytes)
+        try:
+            return cls.from_dict(doc)
+        except (KeyError, TypeError) as exc:
+            raise ValueError(f"not a coregistration result ({exc!r} missing or wrong)") from exc
 
     @classmethod
     def from_dict(cls, d: dict) -> CoregResult:

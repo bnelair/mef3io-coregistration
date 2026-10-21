@@ -2,12 +2,16 @@
 
 A file is written compressed when its name ends in ``.gz`` (e.g. ``result.coreg.json.gz``), and
 read compressed whenever its content is gzip, whatever its name — so a renamed or downloaded copy
-always opens. Compressed files are byte-stable (no timestamp or name in the gzip header), so saving
-the same document twice gives the same bytes, and the same hash.
+always opens. The gzip header carries no timestamp or name, so re-saving gives the same bytes with
+the same zlib; hashes and a mapping's check of its result use the decompressed content, which is
+the same everywhere. Decompression is bounded (``max_bytes``): a result is a few MB even for days
+of recording, so a far larger stream is refused rather than allowed to exhaust memory.
 
->>> from mef3io_coregistration.io.jsonfile import read_json, write_json
->>> write_json("result.coreg.json.gz", {"format": "…"})      # compressed: the name says so
->>> read_json("result.coreg.json.gz")                           # either kind, detected
+Usage::
+
+    from mef3io_coregistration.io.jsonfile import read_json, write_json
+    write_json("result.coreg.json.gz", doc)     # compressed: the name says so
+    doc = read_json("result.coreg.json.gz")     # either kind, detected from the content
 """
 from __future__ import annotations
 
@@ -15,10 +19,13 @@ import gzip
 import hashlib
 import io
 import json
-from pathlib import Path
+import zlib
+from pathlib import Path, PurePath, PureWindowsPath
 
 #: The first two bytes of every gzip stream (RFC 1952).
 GZIP_MAGIC = b"\x1f\x8b"
+#: The most a file of this package may decompress to (1 GiB; a result is a few MB).
+MAX_BYTES = 1024 * 1024 * 1024
 
 
 def is_gzip(data: bytes) -> bool:
@@ -41,16 +48,30 @@ def gzip_bytes(data: bytes) -> bytes:
     return buf.getvalue()
 
 
-def plain_bytes(data: bytes) -> bytes:
-    """``data`` decompressed if it is gzip, unchanged otherwise."""
-    return gzip.decompress(data) if is_gzip(data) else data
+def plain_bytes(data: bytes, max_bytes: int = MAX_BYTES) -> bytes:
+    """``data`` decompressed if it is gzip, unchanged otherwise. Raises :class:`ValueError` for a
+    damaged gzip stream, or one that decompresses to more than ``max_bytes``."""
+    if not is_gzip(data):
+        return data
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as gz:
+            out = gz.read(max_bytes + 1)
+    except (EOFError, OSError, zlib.error) as exc:
+        raise ValueError(f"not a valid gzip stream ({exc})") from exc
+    if len(out) > max_bytes:
+        raise ValueError(f"the file decompresses to more than {max_bytes} bytes; not a result")
+    return out
 
 
-def loads(data: bytes | str) -> dict:
-    """A document from plain or gzip-compressed JSON bytes (or a JSON string)."""
-    if isinstance(data, str):
-        return json.loads(data)
-    return json.loads(plain_bytes(data).decode("utf-8"))
+def loads(data: bytes | str, max_bytes: int = MAX_BYTES) -> dict:
+    """A document from plain or gzip-compressed JSON bytes (or a JSON string). Raises
+    :class:`ValueError` for anything that is not a JSON object (a damaged or foreign file)."""
+    if isinstance(data, bytes):
+        data = plain_bytes(data, max_bytes).decode("utf-8-sig")  # a BOM from an editor is fine
+    doc = json.loads(data)
+    if not isinstance(doc, dict):
+        raise ValueError("not a file of this package (the JSON is not an object)")
+    return doc
 
 
 def read_json(path: str | Path) -> dict:
@@ -70,6 +91,12 @@ def content_sha256(source: str | Path | bytes) -> str:
     that names its result by hash accepts either form."""
     data = source if isinstance(source, bytes) else Path(source).read_bytes()
     return hashlib.sha256(plain_bytes(data)).hexdigest()
+
+
+def file_name(path: str | Path) -> str:
+    """The file name of a stored path, also when it was written on Windows (``C:\\d\\x.json``)."""
+    s = str(path)
+    return PureWindowsPath(s).name if "\\" in s else PurePath(s).name
 
 
 def other_form(path: str | Path) -> Path:

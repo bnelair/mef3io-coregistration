@@ -286,7 +286,7 @@ class CoregisteredRecording:
         the result's by more than 1 s), unless ``verify=False``. The config and the result may be
         plain or gzip-compressed (``.json.gz``), and a result named in one form is also found in
         the other: the hash is of the JSON content, so a compressed copy matches."""
-        from ..io.jsonfile import other_form, read_json
+        from ..io.jsonfile import content_sha256, file_name, other_form, read_json
 
         d = read_json(config_path)
         if d.get("format") != _FORMAT:
@@ -294,19 +294,21 @@ class CoregisteredRecording:
         res = result if result is not None else d["result"]
         if res is None:
             raise ValueError("this config names no result file; pass result=<the clock-map result>")
+        expected = d.get("result_sha256")
         if isinstance(res, (str, Path)):
             here = Path(config_path).parent
-            candidates = [Path(res)] if Path(res).is_absolute() else [here / res, Path(res)]
-            candidates += [here / Path(res).name]
-            candidates += [other_form(c) for c in candidates]  # x.json ↔ x.json.gz
-            found = next((c for c in candidates if c.exists()), None)
-            if found is None:
+            places = [Path(res)] if Path(res).is_absolute() else [here / res, Path(res)]
+            places.append(here / file_name(res))  # beside the config (also for a Windows path)
+            candidates = [c for p in places for c in (p, other_form(p))]  # x.json ↔ x.json.gz
+            existing = [c for c in candidates if c.exists()]
+            if not existing:
                 raise FileNotFoundError(
                     f"the result {res} is not there any more (nor compressed, nor next to the "
                     "config); pass result=<where it is now>"
                 )
-            res = found
-        expected = d.get("result_sha256")
+            # the first one that IS the saved result (by its content hash), else the first found
+            res = next((c for c in existing if expected and verify and content_sha256(c) == expected),
+                       existing[0])
         if expected and isinstance(res, (str, Path)) and verify:
             actual = _sha256(res)
             if actual != expected:

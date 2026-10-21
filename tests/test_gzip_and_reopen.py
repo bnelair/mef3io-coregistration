@@ -83,3 +83,44 @@ def test_a_saved_result_reopens_in_a_session(pair, tmp_path):  # noqa: F811
     assert sess.reopened is None
     with pytest.raises(ValueError, match="spans"):  # the time-span check applies
         CoregSession().open_result(gz, file_b=other_p)
+
+
+def test_damaged_or_hostile_files_are_refused_cleanly():
+    from mef3io_coregistration.io.jsonfile import gzip_bytes, loads
+
+    bomb = gzip_bytes(b"0" * (3 * 1024 * 1024))  # tiny on disk, large unpacked
+    with pytest.raises(ValueError, match="decompresses to more than"):
+        loads(bomb, max_bytes=1024 * 1024)
+    with pytest.raises(ValueError, match="not a valid gzip"):
+        loads(b"\x1f\x8b")  # the magic bytes and nothing else
+    with pytest.raises(ValueError, match="not a valid gzip"):
+        loads(gzip_bytes(b'{"a": 1}')[:-6])  # truncated
+    with pytest.raises(ValueError, match="not an object"):
+        loads(b"[1]")
+    with pytest.raises(ValueError, match="not a coregistration result"):
+        CoregResult.from_bytes(b'{"format": "signal_coregistration.coreg_result"}')
+    assert loads("﻿{\"a\": 1}".encode()) == {"a": 1}  # a BOM from an editor
+
+
+def test_opening_other_files_forgets_a_reopened_result(pair, tmp_path):  # noqa: F811
+    res_p, a_p, b_p, _ = pair
+    sess = CoregSession(background=False).open_result(res_p)
+    assert sess.reopened is not None
+    sess.open(str(b_p), str(a_p), reference="B")
+    assert sess.reopened is None and sess.clock_map is None and sess.anchors == []
+    with pytest.raises(RuntimeError, match="No clock map"):
+        sess.result()
+
+
+def test_a_mapping_prefers_the_copy_that_is_its_result(pair, tmp_path):  # noqa: F811
+    res_p = pair[0]
+    folder = tmp_path / "s"
+    folder.mkdir()
+    plain = shutil.copy(res_p, folder / "pair.coreg.json")
+    rec = CoregisteredRecording.open(plain)
+    rec.set_channel("x", a="x", b="x", prefer="A")
+    cfg = rec.save_config(folder / "pair.recording.json", result_path=plain)
+    CoregResult.load(plain).save(folder / "pair.coreg.json.gz")  # the true result, compressed
+    plain.write_text(plain.read_text().replace('"reference_role"', '"reference_role" '), encoding="utf-8")
+    again = CoregisteredRecording.from_config(cfg)  # the edited plain file is passed over
+    assert list(again.channels) == ["x"]

@@ -76,14 +76,17 @@ from mef3io_coregistration.result import CoregResult
 
 res = CoregResult.load("subject01.coreg.json")
 res.save("subject01.coreg.json.gz")            # the same result, compressed
-rec = CoregisteredRecording.open("subject01.coreg.json.gz")
+with CoregisteredRecording.open("subject01.coreg.json.gz") as rec:
+    ...
 ```
 
 ## Reopen a result to save or change it
 
 `CoregSession().open_result(path)` reopens a saved result (plain or `.gz`) with
 its recordings and clock map, without re-running the stages: read through it,
-save it again (for example compressed), or continue aligning from it.
+save it again (for example compressed), or continue aligning from it (select the
+channels again with `set_channels`, and give a Stage 1 offset with
+`manual_offset` before seeking new anchors).
 
 ```python
 from mef3io_coregistration.session import CoregSession

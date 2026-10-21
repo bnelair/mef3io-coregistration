@@ -15,8 +15,8 @@ loading and saving again gives the same bytes and the same map.
 **Compressed.** Any of these files may be gzip-compressed: saving to a name
 ending in `.gz` (`result.coreg.json.gz`, `….recording.json.gz`) compresses it,
 and every reader detects gzip from the content, whatever the file is called.
-A compressed file holds exactly the same JSON, byte-stable (no timestamp in
-the gzip header); the hash a mapping stores for its result is of the JSON
+A compressed file holds exactly the same JSON (no timestamp in the gzip
+header); the hash a mapping stores for its result is of the decompressed JSON
 content, so a mapping accepts its result in either form and finds it under
 either name. For long recordings, whose drift tables are large, prefer `.gz`.
 

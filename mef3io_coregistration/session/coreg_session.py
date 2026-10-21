@@ -111,9 +111,22 @@ class CoregSession:
         """
         if reference not in ("A", "B"):
             raise ValueError('reference must be "A" or "B"')
+        if self._files:  # new files: nothing aligned on the old ones carries over
+            self._clear()
         self._files = {"A": str(file_a), "B": str(file_b)}
         self.reference_role = reference
         return self
+
+    def _clear(self) -> None:
+        """Forget everything about the current pair: alignment, channels, reopened result and the
+        in-memory products."""
+        self.reset_alignment()
+        self.moving_inverted = False
+        self._stages = {}
+        self._anchor_filters = {}
+        self._drift_filters = None
+        self._opened = None
+        self.close()
 
     @_serialized
     def open_result(
@@ -132,16 +145,29 @@ class CoregSession:
         stages are not re-run: until a new clock map is made, :meth:`result` returns the result
         as saved (anchors, drift, filters, QC), with the recordings' current paths. Returns the
         session, so ``CoregSession().open_result(path)`` chains.
+
+        To continue aligning from it, select channels again (:meth:`set_channels`); the anchors
+        are restored (without their correlation values, which a result does not store), but there
+        is no Stage 1 lock, so give one (:meth:`manual_offset`) before new anchors are sought.
+        A :class:`CoregResult` with relative recording paths resolves them against the working
+        directory (a saved file: against its folder).
         """
         from ..reader.coregistered_reader import CoregisteredReader
 
         res = result if isinstance(result, CoregResult) else CoregResult.load(result)
-        rd = CoregisteredReader.from_result(result, file_a, file_b, verify=verify)
+        near = None if isinstance(result, CoregResult) else Path(result).parent
+        rd = CoregisteredReader.from_result(res, file_a, file_b, verify=verify, near=near)
         paths = dict(rd.paths)
         rd.close()
+        self._clear()
         self.open(paths["A"], paths["B"], reference=res.reference_role)  # type: ignore[arg-type]
         self.clock_map = res.clock_map
         self.anchors = list(res.anchors)
+        # each anchor keeps the filters it was estimated with, so a map built from them later
+        # saves the right provenance
+        for f in (res.stage_filters or {}).get("fine", []) or []:
+            if isinstance(f, dict) and "t_ref_uutc" in f:
+                self._anchor_filters[int(f["t_ref_uutc"])] = f.get("filters")
         self._opened = res
         return self
 
@@ -150,8 +176,9 @@ class CoregSession:
         """The result :meth:`open_result` reopened, while its clock map is still the current one
         (``None`` otherwise): a front end shows its saved quality report instead of rebuilding
         one from stages that were not run here."""
-        if self._opened is not None and self.clock_map is self._opened.clock_map:
-            return self._opened
+        o = self._opened
+        if o is not None and self.clock_map is o.clock_map and self.reference_role == o.reference_role:
+            return o
         return None
 
     def close(self) -> None:
