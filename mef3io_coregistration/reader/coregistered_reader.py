@@ -76,6 +76,7 @@ class CoregisteredReader:
         verify: bool = True,
         password_a: str | None = None,
         password_b: str | None = None,
+        near: str | Path | None = None,
     ) -> CoregisteredReader:
         """Open the files a coregistration result was computed on, with its A/B roles.
 
@@ -93,7 +94,9 @@ class CoregisteredReader:
         from ..result import CoregResult
 
         res = result if isinstance(result, CoregResult) else CoregResult.load(result)
-        near = None if isinstance(result, CoregResult) else Path(result).parent
+        if near is None and not isinstance(result, CoregResult):
+            near = Path(result).parent  # a moved recording is also looked for next to the file
+        near = None if near is None else Path(near)
         paths = {
             "A": str(file_a) if file_a is not None else _locate(res.file_a, near, "A"),
             "B": str(file_b) if file_b is not None else _locate(res.file_b, near, "B"),

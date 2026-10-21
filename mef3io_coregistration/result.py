@@ -11,7 +11,6 @@ re-saving is byte-stable.
 """
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -103,10 +102,30 @@ class CoregResult:
         }
 
     def save(self, path: str | Path) -> Path:
-        """Write the result as sorted-key JSON; returns ``path``. Re-saving is byte-stable."""
-        path = Path(path)
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8", newline="\n")
-        return path
+        """Write the result as sorted-key JSON; returns ``path``. A name ending in ``.gz``
+        (``result.coreg.json.gz``) writes it gzip-compressed. Re-saving is byte-stable."""
+        from .io.jsonfile import write_json
+
+        return write_json(path, self.to_dict())
+
+    def to_bytes(self, compress: bool = False) -> bytes:
+        """The file :meth:`save` writes, as bytes (gzip-compressed when ``compress``)."""
+        from .io.jsonfile import dumps
+
+        return dumps(self.to_dict(), compress=compress)
+
+    @classmethod
+    def from_bytes(cls, data: bytes, max_bytes: int | None = None) -> CoregResult:
+        """A result from the bytes of a saved file, plain or gzip-compressed (an upload).
+        Decompression stops at ``max_bytes`` (default 1 GiB); a front end should also cap the
+        size of the upload itself. Raises :class:`ValueError` for anything that is not a result."""
+        from .io.jsonfile import MAX_BYTES, loads
+
+        doc = loads(data, MAX_BYTES if max_bytes is None else max_bytes)
+        try:
+            return cls.from_dict(doc)
+        except (KeyError, TypeError) as exc:
+            raise ValueError(f"not a coregistration result ({exc!r} missing or wrong)") from exc
 
     @classmethod
     def from_dict(cls, d: dict) -> CoregResult:
@@ -139,5 +158,8 @@ class CoregResult:
 
     @classmethod
     def load(cls, path: str | Path) -> CoregResult:
-        """Read a result saved with :meth:`save` (any earlier format version too)."""
-        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+        """Read a result saved with :meth:`save` (any earlier format version too), plain or
+        gzip-compressed — detected from the content, whatever the file is called."""
+        from .io.jsonfile import read_json
+
+        return cls.from_dict(read_json(path))

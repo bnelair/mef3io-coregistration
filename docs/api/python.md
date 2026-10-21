@@ -84,6 +84,10 @@ The functions `CoregSession` calls, for use on your own arrays.
 
 ::: mef3io_coregistration.align.parabolic_peak
 
+## JSON files, plain or compressed
+
+::: mef3io_coregistration.io.jsonfile
+
 ## Loading the alignment signals
 
 ::: mef3io_coregistration.session.LoadSpec

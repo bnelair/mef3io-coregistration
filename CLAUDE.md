@@ -53,7 +53,10 @@ regenerate when the harness version or profile changes.
   uUTC reads snapped to the sample grid, gaps as `Gap` records,
   `time_span`, `fingerprint`, `SPAN_TOLERANCE_US` = 1 s); `derived.py`
   decimation (group-delay compensated) and the min-max envelope;
-  `chunked.py` full-length chunked loading (overlap-save decimation).
+  `chunked.py` full-length chunked loading (overlap-save decimation);
+  `jsonfile.py` the package's JSON files, plain or gzip (compressed when the
+  name ends in `.gz`, detected by content on read, bounded decompression,
+  `content_sha256` of the decompressed JSON — what a mapping stores).
 - `montage/` — `ChannelSpec` (unipolar / `anode - cathode`, per file, string
   forms resolved against the file's channel list), `bipolar`, `read_montage`.
 - `reader/` — `coregistered_reader.CoregisteredReader` (raw or coregistered

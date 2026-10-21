@@ -11,7 +11,6 @@ arithmetic is done on offsets from the first anchor and the integer origin is re
 """
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -177,10 +176,11 @@ class ClockMap:
         }
 
     def save(self, path: str | Path) -> Path:
-        """Persist the map as JSON (integer anchors → bit-stable reload)."""
-        path = Path(path)
-        path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8", newline="\n")
-        return path
+        """Persist the map as JSON (integer anchors → bit-stable reload); gzip-compressed when the
+        name ends in ``.gz``."""
+        from ..io.jsonfile import write_json
+
+        return write_json(path, self.to_dict())
 
     @classmethod
     def from_dict(cls, d: dict) -> ClockMap:
@@ -197,8 +197,10 @@ class ClockMap:
 
     @classmethod
     def load(cls, path: str | Path) -> ClockMap:
-        """Read a map saved with :meth:`save`."""
-        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
+        """Read a map saved with :meth:`save`, plain or gzip-compressed."""
+        from ..io.jsonfile import read_json
+
+        return cls.from_dict(read_json(path))
 
 
 def _interp_extrap(

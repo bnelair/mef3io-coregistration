@@ -66,6 +66,35 @@ gain, units); state how they relate with `scale_a`/`offset_a`/`scale_b`/
 [Methods §8](../methods.md#8-using-the-two-files-as-one-recording) explains
 the check.
 
+## Compressed results
+
+A result, a clock map or a mapping saved as `….json.gz` is gzip-compressed; every
+call above opens it the same way (compression is detected from the content):
+
+```python
+from mef3io_coregistration.result import CoregResult
+
+res = CoregResult.load("subject01.coreg.json")
+res.save("subject01.coreg.json.gz")            # the same result, compressed
+with CoregisteredRecording.open("subject01.coreg.json.gz") as rec:
+    ...
+```
+
+## Reopen a result to save or change it
+
+`CoregSession().open_result(path)` reopens a saved result (plain or `.gz`) with
+its recordings and clock map, without re-running the stages: read through it,
+save it again (for example compressed), or continue aligning from it (select the
+channels again with `set_channels`, and give a Stage 1 offset with
+`manual_offset` before seeking new anchors).
+
+```python
+from mef3io_coregistration.session import CoregSession
+
+sess = CoregSession().open_result("subject01.coreg.json", file_b="/new/place/recording_b.mefd")
+sess.result().save("subject01.coreg.json.gz")
+```
+
 ## Event times between the clocks
 
 ```python

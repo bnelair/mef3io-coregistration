@@ -12,6 +12,14 @@ made. Keys are written sorted, with 2-space indentation, and every absolute
 time is an **integer uUTC** (microseconds since the Unix epoch), so saving,
 loading and saving again gives the same bytes and the same map.
 
+**Compressed.** Any of these files may be gzip-compressed: saving to a name
+ending in `.gz` (`result.coreg.json.gz`, `….recording.json.gz`) compresses it,
+and every reader detects gzip from the content, whatever the file is called.
+A compressed file holds exactly the same JSON (no timestamp in the gzip
+header); the hash a mapping stores for its result is of the decompressed JSON
+content, so a mapping accepts its result in either form and finds it under
+either name. For long recordings, whose drift tables are large, prefer `.gz`.
+
 The `format` identifiers below are historical and kept for compatibility:
 every result and mapping saved since they were introduced opens unchanged.
 They are identifiers, not package names.

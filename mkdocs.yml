@@ -68,6 +68,7 @@ nav:
       - Python: api/python.md
   - Release notes:
       - All releases: release_notes/index.md
+      - "0.3.1": release_notes/0.3.1.md
       - "0.3.0": release_notes/0.3.0.md
   - Development:
       - Design & internals: design.md
