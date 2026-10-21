@@ -12,6 +12,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 import numpy as np
 
@@ -98,6 +99,8 @@ class CoregSession:
         self._drift_filters: dict | None = None
         self.drift_estimate: DriftEstimate | None = None
         self.clock_map: ClockMap | None = None
+        # A result reopened with open_result(): returned as saved while its clock map is current.
+        self._opened: CoregResult | None = None
 
     # -- lifecycle --------------------------------------------------
     def open(self, file_a: str, file_b: str, reference: FileRole = "A") -> CoregSession:
@@ -110,6 +113,36 @@ class CoregSession:
             raise ValueError('reference must be "A" or "B"')
         self._files = {"A": str(file_a), "B": str(file_b)}
         self.reference_role = reference
+        return self
+
+    @_serialized
+    def open_result(
+        self,
+        result: CoregResult | str | Path,
+        file_a: str | Path | None = None,
+        file_b: str | Path | None = None,
+        verify: bool = True,
+    ) -> CoregSession:
+        """Reopen a saved result: its two recordings, its reference role and its clock map, ready
+        to read (:meth:`open_reader`, :meth:`open_recording`) or to save again.
+
+        ``result`` is a :class:`CoregResult` or a saved file (``.json`` or ``.json.gz``).
+        ``file_a``/``file_b`` override the stored paths; each recording is checked by its time
+        span, as :meth:`CoregisteredReader.from_result` does (``verify=False`` skips that). The
+        stages are not re-run: until a new clock map is made, :meth:`result` returns the result
+        as saved (anchors, drift, filters, QC), with the recordings' current paths. Returns the
+        session, so ``CoregSession().open_result(path)`` chains.
+        """
+        from ..reader.coregistered_reader import CoregisteredReader
+
+        res = result if isinstance(result, CoregResult) else CoregResult.load(result)
+        rd = CoregisteredReader.from_result(result, file_a, file_b, verify=verify)
+        paths = dict(rd.paths)
+        rd.close()
+        self.open(paths["A"], paths["B"], reference=res.reference_role)  # type: ignore[arg-type]
+        self.clock_map = res.clock_map
+        self.anchors = list(res.anchors)
+        self._opened = res
         return self
 
     def close(self) -> None:
@@ -720,6 +753,14 @@ class CoregSession:
         if self.clock_map is None:
             raise RuntimeError(
                 "No clock map yet — estimate drift in Stage 3, or build the map without drift."
+            )
+        if self._opened is not None and self.clock_map is self._opened.clock_map:
+            # A reopened result, unchanged: as saved, with the recordings where they are now.
+            return replace(
+                self._opened,
+                reference_file=self.reference_file,
+                moving_file=self.moving_file,
+                qc=qc if qc is not None else self._opened.qc,
             )
         return CoregResult(
             clock_map=self.clock_map,

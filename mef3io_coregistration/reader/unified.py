@@ -25,7 +25,6 @@ returns its native samples untransformed.
 """
 from __future__ import annotations
 
-import json
 import re
 import threading
 from collections.abc import Iterable
@@ -284,25 +283,29 @@ class CoregisteredRecording:
         ``result``/``file_a``/``file_b`` override the stored paths; a stored result path that no
         longer exists is looked for next to the config. The config holds the result file's hash:
         a result overwritten since is refused (as are MEF3 files whose start or end differs from
-        the result's by more than 1 s), unless ``verify=False``."""
-        d = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        the result's by more than 1 s), unless ``verify=False``. The config and the result may be
+        plain or gzip-compressed (``.json.gz``), and a result named in one form is also found in
+        the other: the hash is of the JSON content, so a compressed copy matches."""
+        from ..io.jsonfile import other_form, read_json
+
+        d = read_json(config_path)
         if d.get("format") != _FORMAT:
             raise ValueError(f"not a recording config (format={d.get('format')!r})")
         res = result if result is not None else d["result"]
         if res is None:
             raise ValueError("this config names no result file; pass result=<the clock-map result>")
-        if isinstance(res, (str, Path)) and not Path(res).is_absolute():
-            beside = Path(config_path).parent / res
-            if beside.exists():
-                res = beside
-        if isinstance(res, (str, Path)) and not Path(res).exists():
-            beside = Path(config_path).parent / Path(res).name
-            if not beside.exists():
+        if isinstance(res, (str, Path)):
+            here = Path(config_path).parent
+            candidates = [Path(res)] if Path(res).is_absolute() else [here / res, Path(res)]
+            candidates += [here / Path(res).name]
+            candidates += [other_form(c) for c in candidates]  # x.json ↔ x.json.gz
+            found = next((c for c in candidates if c.exists()), None)
+            if found is None:
                 raise FileNotFoundError(
-                    f"the result {res} is not there any more, nor next to the config; "
-                    "pass result=<where it is now>"
+                    f"the result {res} is not there any more (nor compressed, nor next to the "
+                    "config); pass result=<where it is now>"
                 )
-            res = beside
+            res = found
         expected = d.get("result_sha256")
         if expected and isinstance(res, (str, Path)) and verify:
             actual = _sha256(res)
@@ -315,14 +318,15 @@ class CoregisteredRecording:
                         password_a=password_a, password_b=password_b)
 
     def save_config(self, path: str | Path, result_path: str | Path | None = None) -> Path:
-        """Persist the logical-channel mapping (and the result it applies to) as JSON."""
-        path = Path(path)
+        """Persist the logical-channel mapping (and the result it applies to) as JSON;
+        gzip-compressed when the name ends in ``.gz``."""
+        from ..io.jsonfile import write_json
+
         doc = self.config_dict(
             None if result_path is None else str(result_path),
             None if result_path is None else _sha256(result_path),
         )
-        path.write_text(json.dumps(doc, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
-        return path
+        return write_json(path, doc)
 
     def config_dict(self, result: str | None, result_sha256: str | None) -> dict:
         """The mapping as :meth:`save_config` writes it. ``result`` may be a bare file name: the
@@ -775,9 +779,11 @@ class CoregisteredRecording:
 
 
 def _sha256(path: str | Path) -> str:
-    import hashlib
+    """The hash a mapping stores for its result: of the JSON content, so the plain file and its
+    gzip-compressed copy hash alike."""
+    from ..io.jsonfile import content_sha256
 
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return content_sha256(path)
 
 
 _NAME_PREFIX = re.compile(r"^(?:s?eeg|ecog|ieeg|pol)[\s_:-]+", re.IGNORECASE)
