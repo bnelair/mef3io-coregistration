@@ -145,6 +145,15 @@ class CoregSession:
         self._opened = res
         return self
 
+    @property
+    def reopened(self) -> CoregResult | None:
+        """The result :meth:`open_result` reopened, while its clock map is still the current one
+        (``None`` otherwise): a front end shows its saved quality report instead of rebuilding
+        one from stages that were not run here."""
+        if self._opened is not None and self.clock_map is self._opened.clock_map:
+            return self._opened
+        return None
+
     def close(self) -> None:
         """Release the in-memory products (they live until the session is closed)."""
         self._products.clear()
@@ -754,13 +763,13 @@ class CoregSession:
             raise RuntimeError(
                 "No clock map yet — estimate drift in Stage 3, or build the map without drift."
             )
-        if self._opened is not None and self.clock_map is self._opened.clock_map:
+        if self.reopened is not None:
             # A reopened result, unchanged: as saved, with the recordings where they are now.
             return replace(
-                self._opened,
+                self.reopened,
                 reference_file=self.reference_file,
                 moving_file=self.moving_file,
-                qc=qc if qc is not None else self._opened.qc,
+                qc=qc if qc is not None else self.reopened.qc,
             )
         return CoregResult(
             clock_map=self.clock_map,

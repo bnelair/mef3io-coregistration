@@ -78,5 +78,8 @@ def test_a_saved_result_reopens_in_a_session(pair, tmp_path):  # noqa: F811
     assert out.anchors == saved.anchors and out.created_utc == saved.created_utc
     with sess.open_reader() as rd:
         assert rd.paths["A"] == str(a_p)
+    assert sess.reopened is not None
+    sess.clock_map = None  # any new map (or none) ends it
+    assert sess.reopened is None
     with pytest.raises(ValueError, match="spans"):  # the time-span check applies
         CoregSession().open_result(gz, file_b=other_p)
