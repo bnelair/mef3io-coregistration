@@ -16,12 +16,13 @@ the Unix epoch), as in MEF 3.0.
 | [01_align_synthetic_pair.py](https://github.com/bnelair/mef3io-coregistration/blob/main/examples/01_align_synthetic_pair.py) | The whole workflow on a synthetic pair with a known clock offset and drift: Stage 1, 2 and 3 with `CoregSession`, saving the result, reading file B on the reference clock with `CoregisteredSession`, both files as one channel with `CoregisteredRecording` (one file filling in before the other starts), event times between the clocks ([how-to](howto/align_python.md)) |
 | [02_read_coregistered_recording.py](https://github.com/bnelair/mef3io-coregistration/blob/main/examples/02_read_coregistered_recording.py) | Every way to read through a saved result: `CoregisteredSession` and the legacy `CoregisteredMefReader`, logical channels, a bipolar channel per file, the agreement check and per-source scale, runs across a file edge, sample-aligned arrays with `CoregisteredReader`, time conversion, saving and reopening a mapping (needs your result; [how-to](howto/read_python.md)) |
 | [03_review_report.py](https://github.com/bnelair/mef3io-coregistration/blob/main/examples/03_review_report.py) | The plotted review report, the same as `sigcoreg-review` (needs your result and the `report` extra; [how-to](howto/review_report.md)) |
+| [04_export_coregistered.py](https://github.com/bnelair/mef3io-coregistration/blob/main/examples/04_export_coregistered.py) | Writing a brand-new MEF 3.0 session with both recordings on the reference clock: `export_coregistered` with a channel prefix, a thread count and a progress callback (self-contained; [how-to](howto/export_resampled.md)) |
 
 ```bash
 python examples/01_align_synthetic_pair.py
 python examples/02_read_coregistered_recording.py path/to/result.coreg.json
 ```
 
-All three run in the test suite (`tests/test_examples.py`): `01` as it is,
+All four run in the test suite (`tests/test_examples.py`): `01` and `04` as they are,
 `02` on a synthetic result whose recordings carry `ch1` and `ch2`, and the
 review report on `01`'s result.

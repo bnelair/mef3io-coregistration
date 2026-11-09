@@ -84,6 +84,17 @@ with CoregisteredRecording.open("pair.coreg.json") as rec:
     sig.data, sig.ts, sig.source      # source per sample: 1 = file A, 2 = file B, 0 = no data
 ```
 
+Write a **new MEF 3.0 session** with both recordings on the reference clock
+(reference channels unchanged, moving channels resampled; choose the channels
+and the number of threads):
+
+```python
+from mef3io_coregistration.export import export_coregistered
+
+report = export_coregistered("pair.coreg.json", "pair_merged.mefd", "system_a.mefd", "system_b.mefd",
+                             moving_prefix="B_", n_threads=4)
+```
+
 Times are microseconds since the Unix epoch (uUTC), as MEF 3.0 stores them.
 `CoregSession()` without `background=False` loads both files in parallel worker
 processes; a script using it must keep its code under
@@ -121,6 +132,12 @@ short how-to pages such as
   new paths, and each is matched to its role by its start and end time
   ([open a result from a pipeline](https://bnelair.github.io/mef3io-coregistration/howto/pipeline/);
   the [result format](https://bnelair.github.io/mef3io-coregistration/result_format/)).
+- **A new session on one clock.** `export_coregistered` writes a brand-new
+  `.mefd` from a result and the two recordings: chosen channels of either one,
+  moving channels resampled onto the reference clock, gaps kept, bounded
+  memory, a thread count, progress and cancel, read back and verified before
+  it is put in place, never overwriting
+  ([how-to](https://bnelair.github.io/mef3io-coregistration/howto/export_resampled/)).
 - **Review before trust.** `sigcoreg-review result.json` writes a plotted
   report, from the whole recording down to single samples
   ([review report](https://bnelair.github.io/mef3io-coregistration/howto/review_report/)).
@@ -139,8 +156,10 @@ short how-to pages such as
 - **Files are matched by time span only.** A file passes when its start and
   end are within 1 s of the ones stored in the result; two recordings with
   the same span cannot be told apart.
-- **Reading, not writing.** Coregistered reads return arrays; writing an
-  aligned copy as a new MEF 3.0 session is left to the caller (with mef3io).
+- **One clock relation for an export, too.** `export_coregistered` writes a
+  new session only inside the span the clock map was measured over (it
+  refuses, or trims on request, beyond it); the first and last few samples of
+  each moving channel, where the resampling filter has no data, are dropped.
 
 ## Contributing and support
 

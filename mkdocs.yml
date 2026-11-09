@@ -60,6 +60,7 @@ nav:
       - Read a coregistration in Python: howto/read_python.md
       - Align two recordings in Python: howto/align_python.md
       - Open a result from a pipeline: howto/pipeline.md
+      - Write a coregistered session: howto/export_resampled.md
       - Review a coregistration: howto/review_report.md
   - Guides:
       - Methods: methods.md
@@ -68,6 +69,7 @@ nav:
       - Python: api/python.md
   - Release notes:
       - All releases: release_notes/index.md
+      - Unreleased: release_notes/unreleased.md
       - "0.3.1": release_notes/0.3.1.md
       - "0.3.0": release_notes/0.3.0.md
   - Development:

@@ -31,8 +31,9 @@ classifiers = [
   "Typing :: Typed",
 ]
 # mef3io: every MEF 3.0 read (and the legacy mef_tools API the reader mirrors);
-# 1.3 is the first with the partial reads and path handling the reader needs.
-dependencies = ["numpy>=1.24", "scipy>=1.10", "mef3io>=1.3.0,<2"]
+# 2.3 is the first release with the parallel multi-channel read and write the export uses
+# (Reader.read([...]), Writer.write_many) and the one n_threads rule.
+dependencies = ["numpy>=1.24", "scipy>=1.10", "mef3io>=2.3.0,<3"]
 
 [project.urls]
 Homepage = "https://bnelair.github.io/mef3io-coregistration/"

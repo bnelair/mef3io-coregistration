@@ -41,6 +41,20 @@ The JSON they are saved as is described in [Result format](../result_format.md).
 
 ::: mef3io_coregistration.transform.resample_onto_reference
 
+## Writing a new session
+
+See [Write a coregistered session](../howto/export_resampled.md).
+
+::: mef3io_coregistration.export.export_coregistered
+
+::: mef3io_coregistration.export.ExportReport
+
+::: mef3io_coregistration.export.ExportedChannel
+
+::: mef3io_coregistration.export.ExportCancelled
+
+::: mef3io_coregistration.export.ExportVerificationError
+
 ## Aligning two recordings
 
 See [Align two recordings in Python](../howto/align_python.md) for the

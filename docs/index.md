@@ -97,8 +97,12 @@ A complete version that makes its own recordings is
   stretch.
 - Files are matched to a result only by their start and end (within 1 s);
   two recordings with the same span cannot be told apart.
-- Coregistered reads return arrays; writing an aligned copy as a new MEF 3.0
-  session is left to the caller (with mef3io).
+- Coregistered reads return arrays. `export_coregistered` writes a new MEF 3.0
+  session on the reference clock, but only inside the span the clock map was
+  measured over (it refuses, or trims on request, beyond it), and it drops the
+  first and last few samples of each moving channel, where the resampling
+  filter has no data
+  ([how-to](howto/export_resampled.md)).
 
 What changed in each version is in the
 [release notes](release_notes/index.md).
