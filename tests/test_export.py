@@ -443,3 +443,106 @@ def test_argument_checks(world, tmp_path):
         export_coregistered(world["res"], tmp_path / "o.tar", world["a"], world["b"])
     with pytest.raises(FileNotFoundError):
         export_coregistered(world["res"], tmp_path / "nodir" / "o.mefd", world["a"], world["b"])
+
+
+# -- review round 1 ----------------------------------------------------------------------------
+def test_segments_with_different_factors_use_the_finest(tmp_path):
+    """mef3io scales each sample by its own segment's factor (info gives None then): the export
+    must not crash and must keep every reference value exactly (0.01 and 0.1 -> 0.01)."""
+    fs = 100.0
+    x = np.round(np.sin(np.arange(3000) / 7.0) * 30, 2)
+    with mef3io.Writer(str(tmp_path / "a.mefd"), units="uV") as w:
+        w.write("c", x[:1500], _START, fs, precision=2)
+        w.write("c", x[1500:], _START + 15_500_000, fs, precision=1, new_segment=True)
+    _write(tmp_path / "b.mefd", {"d": (x, _START, fs, 2)})
+    with mef3io.Reader(str(tmp_path / "a.mefd")) as r:
+        assert r.info("c")["units_conversion_factor"] is None  # the case under test
+    cm = ClockMap.from_reference_offset(np.array([_START, _START + 40 * US_PER_S]), np.array([0.0, 0.0]))
+    res = CoregResult(cm, str(tmp_path / "a.mefd"), str(tmp_path / "b.mefd"), file_fingerprints={})
+    rep = export_coregistered(res, tmp_path / "o.mefd", tmp_path / "a.mefd", tmp_path / "b.mefd",
+                              moving_prefix="B_", verify_inputs=False)
+    ch = {c.name: c for c in rep.channels}
+    assert ch["c"].units_conversion_factor == pytest.approx(0.01) and ch["c"].precision == 2
+    assert any("different conversion factors" in n for n in rep.notes)
+    src, got = _read_all(tmp_path / "a.mefd"), _read_all(tmp_path / "o.mefd")
+    # both segments' values, as the same decimals (292 x 0.1 vs 2920 x 0.01 differ by one ulp)
+    assert np.array_equal(np.isnan(got["c"][0]), np.isnan(src["c"][0]))
+    np.testing.assert_allclose(got["c"][0], src["c"][0], rtol=1e-15, atol=0)
+    with mef3io.Reader(str(tmp_path / "o.mefd")) as r:
+        raw = r.read_raw("c")
+    ok = np.asarray(raw["valid"]) != 0
+    sv = src["c"][0][~np.isnan(src["c"][0])]  # the source's values: 0.01 and 0.1 steps
+    np.testing.assert_array_equal(np.asarray(raw["samples"])[ok], np.rint(sv * 100).astype(np.int64))
+    assert got["c"][1] == src["c"][1]
+
+
+def test_a_negative_factor_keeps_the_values():
+    from mef3io_coregistration.export import _counts, _factor_precision
+
+    for f, want in ((-0.1, (0.1, 1)), (-0.195, (0.195, None)), (0.0, (1.0, 0)), (1e-3, (1e-3, 3))):
+        got = _factor_precision(f)
+        assert got[1] == want[1] and got[0] == pytest.approx(want[0])
+    counts = np.array([-5, 0, 7, 123456], dtype=np.int64)
+    for f in (-0.1, -0.195):
+        values = counts * f  # what mef3io reads from a negative-factor segment
+        factor, prec = _factor_precision(f)
+        back = _counts(values, factor, prec) * (factor if prec is None else 10.0 ** -prec)
+        np.testing.assert_allclose(back, values, rtol=1e-12, atol=0)  # not rounded to whole units
+
+
+def test_units_override_warns_and_records_the_source_units(world, tmp_path):
+    _write(tmp_path / "m.mefd", {"v": (_sig(np.arange(5000) / 100.0), _START, 100.0, 3)}, units="mV")
+    res = CoregResult(world["cmap"], str(world["a"]), str(tmp_path / "m.mefd"), reference_role="A",
+                      file_fingerprints={})
+    with pytest.warns(UserWarning, match=r"NOT converted.*'v' \(mV\)"):
+        rep = export_coregistered(res, tmp_path / "o.mefd", world["a"], tmp_path / "m.mefd",
+                                  verify_inputs=False, units="uV", out_of_span="extrapolate",
+                                  reference_channels=["x"])
+    assert rep.source_units == {"v": "mV"} and any("NOT converted" in n for n in rep.notes)
+    with mef3io.Reader(str(tmp_path / "o.mefd")) as r:
+        doc = json.loads(next(x["text"] for x in r.records() if "export_coregistered" in x["text"]))
+    assert doc["source_units"] == {"v": "mV"} and doc["units"] == "uV"
+
+
+def test_each_input_is_opened_once(world, tmp_path, monkeypatch):
+    opened = []
+    real = mef3io.Reader
+
+    class Counting(real):
+        def __init__(self, path, *a, **k):
+            opened.append(Path(path).name)
+            super().__init__(path, *a, **k)
+
+    monkeypatch.setattr(mef3io, "Reader", Counting)
+    export_coregistered(world["res"], tmp_path / "once.mefd", world["a"], world["b"], moving_prefix="B_")
+    assert sorted(opened) == ["once.mefd", "recording_a.mefd", "recording_b.mefd"]  # + read-back
+
+
+def test_channel_batches_do_not_change_the_output(world, monkeypatch):
+    import mef3io_coregistration.export as ex
+
+    ref, _ = _export(world, "batch_ref.mefd")
+    monkeypatch.setattr(ex, "_MAX_CHUNK_SAMPLES", 1)  # one channel per batch
+    one, _ = _export(world, "batch_one.mefd")
+    a, b = _read_all(ref), _read_all(one)
+    assert a.keys() == b.keys()
+    for c in a:
+        np.testing.assert_array_equal(a[c][0], b[c][0])
+        assert a[c][1:] == b[c][1:]
+
+
+def test_a_partial_folder_appearing_meanwhile_is_not_removed(world, tmp_path, monkeypatch):
+    import mef3io_coregistration.export as ex
+
+    out = tmp_path / "race.mefd"
+    real = ex._load_result
+
+    def racing(result):  # another process takes the staging name after the checks
+        (tmp_path / "race.mefd.partial").mkdir()
+        (tmp_path / "race.mefd.partial" / "theirs.txt").write_text("theirs")
+        return real(result)
+
+    monkeypatch.setattr(ex, "_load_result", racing)
+    with pytest.raises(FileExistsError):
+        export_coregistered(world["res"], out, world["a"], world["b"], moving_prefix="B_")
+    assert (tmp_path / "race.mefd.partial" / "theirs.txt").read_text() == "theirs"

@@ -35,9 +35,13 @@ report = export_coregistered(
 - **Units and precision.** Each channel keeps its source's sampling rate and units conversion
   factor. A factor that is a power of ten stores decimal counts of it (mef3io's float path); any
   other factor, such as an amplifier's step, is kept exactly and the values are rounded to whole
-  counts of it. A session has one units label: the channels' common one, or the `units=` you pass
-  (the call is refused when the selected channels' units differ and `units=` is missing).
-  Subject metadata is not copied.
+  counts of it. A channel whose segments store different factors is written with the finest of
+  them (exact when they are all powers of ten; otherwise the report says values were rounded), a
+  negative factor as its magnitude (same values). A session has one units label: the channels'
+  common one, or the `units=` you pass (the call is refused when the selected channels' units
+  differ and `units=` is missing). `units=` is only a label, never a conversion: a channel recorded
+  in other units gets a warning, a report note (`report.source_units`) and an entry in the
+  provenance record. Subject metadata is not copied.
 - **Provenance.** A session-level record holds what was done: the recordings' folder names (no
   paths), the result's SHA-256, which recording was the reference and in which direction the map was
   used, the channel lists, and the versions of this package and of mef3io.

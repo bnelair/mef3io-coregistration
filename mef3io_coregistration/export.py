@@ -7,7 +7,11 @@ writes them to a new ``.mefd``:
 * **moving channels** are resampled with the band-limited evaluation of
   :mod:`~mef3io_coregistration.transform.resample` onto a uniform grid on the reference clock, at
   each channel's own sampling rate. The grid starts at the reference-clock time of the channel's
-  first sample, so the output times are fixed, regular and comparable with the reference ones.
+  first sample kept (the first ``support_samples`` samples are dropped, see below), so the output
+  times are fixed, regular and comparable with the reference ones.
+
+Both are read as mef3io reads them: on each channel's nominal grid from its start (a segment that
+resumes a fraction of a sample off that grid is placed on it, as everywhere in this package).
 
 Gaps stay gaps: a source gap is ``NaN`` after the resampling (plus the filter support around it,
 as everywhere in this package) and ``NaN`` is stored as a discontinuity, never interpolated.
@@ -65,6 +69,9 @@ OutOfSpan = Literal["refuse", "trim", "extrapolate"]
 _MIN_PAD_SAMPLES = 256
 #: Samples at each end of a channel compared exactly when the output is read back.
 _VERIFY_EDGE = 512
+#: Samples (all channels of a grid group together) processed per chunk at most: bounds memory
+#: whatever the channel count (float64: 128 MB per copy; reading and resampling hold a few).
+_MAX_CHUNK_SAMPLES = 1 << 24
 #: Longest provenance text written as a record; a longer channel list is summarised by counts.
 _MAX_NOTE_CHARS = 4000
 
@@ -107,6 +114,9 @@ class ExportReport:
     units: str
     mef3io_version: str
     notes: list[str] = field(default_factory=list)
+    #: output channel -> its source's units label, for every channel whose label differs from
+    #: ``units`` (only possible with ``units=``; the values were not converted)
+    source_units: dict[str, str] = field(default_factory=dict)
 
 
 class _RoleMap:
@@ -218,7 +228,9 @@ def export_coregistered(
     units : str, optional
         Units label of the new session. Default: the units of the selected channels when they all
         agree; if they differ the call is refused until ``units`` is given (a MEF session carries one
-        label).
+        label). It is only a label: values are never converted, so a channel recorded in other
+        units would carry the wrong label; that is warned about, noted in the report
+        (``source_units``) and kept in the provenance record.
     password_a, password_b : str, optional
         To read encrypted recordings.
     output_passwords : (str, str), optional
@@ -237,7 +249,8 @@ def export_coregistered(
 
     Notes
     -----
-    Each channel is stored with the sampling rate and units conversion factor of its source. A
+    Each channel is stored with the sampling rate and units conversion factor of its source (one
+    whose segments store different factors: the finest of them; a negative one: its magnitude). A
     factor that is a power of ten stores the data as decimal counts of it (mef3io's float path,
     precision = digits); any other factor (an amplifier's step) is kept verbatim and the values are
     rounded to whole counts of it. Subject metadata is not copied. A session-level record holds
@@ -269,8 +282,6 @@ def export_coregistered(
         "A": str(file_a) if file_a is not None else _locate(res.file_a, near, "A"),
         "B": str(file_b) if file_b is not None else _locate(res.file_b, near, "B"),
     }
-    if verify_inputs:
-        _check_spans(res, paths, {"A": password_a, "B": password_b})
     ref_role = reference or res.reference_role
     mov_role = "B" if ref_role == "A" else "A"
     inverted = ref_role != res.reference_role
@@ -284,8 +295,11 @@ def export_coregistered(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", mef3io.SessionDeclarationWarning)
                 readers[role] = mef3io.Reader(paths[role], password=passwords[role] or "", n_threads=n_threads)
+        if verify_inputs:  # from the readers just opened: each file is opened once
+            _check_spans(res, paths, {"A": password_a, "B": password_b},
+                         spans={role: _time_span(readers[role]) for role in ("A", "B")})
         ref_r, mov_r = readers[ref_role], readers[mov_role]
-        plans, notes, label = _plan(
+        plans, notes, label, source_units = _plan(
             ref_r, mov_r, rmap, reference_channels, moving_channels, reference_prefix, moving_prefix,
             out_of_span, units,
         )
@@ -297,7 +311,7 @@ def export_coregistered(
         report = ExportReport(
             path=str(out), channels=[], result_sha256=res_sha, reference_role=ref_role,
             result_reference_role=res.reference_role, inverted=inverted, units=label,
-            mef3io_version=mef3io.__version__, notes=notes,
+            mef3io_version=mef3io.__version__, notes=notes, source_units=source_units,
         )
         _write_session(
             plans, {"reference": ref_r, "moving": mov_r}, rmap, partial, out, label, names_by_role,
@@ -313,6 +327,20 @@ def export_coregistered(
 
 
 # -- planning ---------------------------------------------------------------------------------
+def _time_span(reader) -> tuple[int | None, int | None]:
+    """:func:`~mef3io_coregistration.io.mef_reader.time_span` of an open mef3io Reader."""
+    starts, ends = [], []
+    for ch in reader.channels:
+        try:
+            info = reader.info(ch)
+            c0, c1 = int(info["start_time"]), int(info["end_time"])
+        except Exception:  # a channel that cannot be described has no span (as time_span)
+            continue
+        starts.append(c0)
+        ends.append(c1)
+    return (min(starts), max(ends)) if starts else (None, None)
+
+
 def _load_result(result) -> tuple[CoregResult, str, Path | None]:
     if isinstance(result, CoregResult):
         return result, content_sha256(dumps(result.to_dict())), None
@@ -333,14 +361,43 @@ def _select(reader, wanted: Sequence[str] | None, which: str) -> list[str]:
 
 
 def _factor_precision(factor: float) -> tuple[float, int | None]:
-    """The factor to store and the decimal precision when it is (within rounding) 10**-p."""
-    f = float(factor)
+    """The factor to store and the decimal precision when it is (within rounding) 10**-p.
+
+    A negative factor (inverted polarity) is stored as its magnitude: the physical values are
+    what is written, so ``-c`` counts of ``|f|`` read back exactly as ``c`` counts of ``f``."""
+    f = abs(float(factor))
     if not (math.isfinite(f) and f > 0):
         f = 1.0  # "not set": mef3io reads such data as the raw counts
     p = int(round(-math.log10(f)))
     if 0 <= p <= 15 and abs(f - 10.0 ** -p) <= 1e-9 * f:
         return 10.0 ** -p, p
     return f, None
+
+
+def _source_factor(reader, source: str, c: str, info: dict, notes: list[str]):
+    """The factor (and decimal precision) ``c`` is stored with in the new session.
+
+    mef3io scales every sample by its OWN segment's factor, and ``info`` gives ``None`` when the
+    segments store different ones. The output channel has one factor: the finest of the
+    segments' (all powers of ten -> exact; otherwise a coarser segment's values are rounded to
+    whole counts of the finest step, which the report notes)."""
+    f = info.get("units_conversion_factor")
+    if f is not None:
+        f = float(f)
+        if f == 0.0:
+            notes.append(f"{source} channel {c!r} stores no conversion factor (MEF's 'no entry'): "
+                         "its raw counts are written as values with factor 1")
+        return _factor_precision(f)
+    segs = [float(s["units_conversion_factor"]) for s in reader.segments(c)]
+    eff = [abs(v) if (math.isfinite(v) and v != 0.0) else 1.0 for v in segs]
+    factor, precision = _factor_precision(min(eff))
+    exact = all(abs(v / factor - round(v / factor)) <= 1e-9 * max(1.0, v / factor) for v in eff)
+    notes.append(
+        f"{source} channel {c!r}: its segments store different conversion factors "
+        f"{sorted(set(segs))}; written with the finest, {factor:g}"
+        + ("" if exact else " (values of the other segments rounded to whole counts of it)")
+    )
+    return factor, precision
 
 
 def _plan(ref_r, mov_r, rmap, ref_sel, mov_sel, ref_prefix, mov_prefix, out_of_span, units):
@@ -366,7 +423,7 @@ def _plan(ref_r, mov_r, rmap, ref_sel, mov_sel, ref_prefix, mov_prefix, out_of_s
     lo, hi = rmap.measured_span
     plans: list[_Plan] = []
     outside: list[str] = []
-    unit_labels: set[str] = set()
+    unit_of: dict[str, str] = {}
     for name, (source, c) in names.items():
         reader = ref_r if source == "reference" else mov_r
         info = dict(reader.info(c))
@@ -376,9 +433,9 @@ def _plan(ref_r, mov_r, rmap, ref_sel, mov_sel, ref_prefix, mov_prefix, out_of_s
         n = int(round((end - start) / period))
         if n < 1:
             raise ValueError(f"{source} channel {c!r} holds no samples")
-        factor, precision = _factor_precision(info.get("units_conversion_factor", 1.0))
+        factor, precision = _source_factor(reader, source, c, info, notes)
         u = info.get("units_description") or ""
-        unit_labels.add(u.decode(errors="replace") if isinstance(u, bytes) else str(u))
+        unit_of[name] = u.decode(errors="replace") if isinstance(u, bytes) else str(u)
         if source == "reference":
             plan = _Plan(name, source, c, fs, start, n, factor, precision, start, 0, n)
         else:
@@ -401,16 +458,26 @@ def _plan(ref_r, mov_r, rmap, ref_sel, mov_sel, ref_prefix, mov_prefix, out_of_s
             notes.append(f"{p.out_name}: {p.extrapolated[0] / US_PER_S:.3f} s at the start and "
                          f"{p.extrapolated[1] / US_PER_S:.3f} s at the end extrapolated beyond the measured span")
     if units is not None:
-        label = units
+        label = str(units)
+        # units= is a LABEL, never a conversion: a channel whose own label differs keeps its
+        # values, so say so loudly (warning + report note + provenance record), never silently.
+        relabelled = {n: u for n, u in unit_of.items() if u and u != label}
+        if relabelled:
+            text = ", ".join(f"{n!r} ({u})" for n, u in sorted(relabelled.items()))
+            msg = (f"units={label!r} only sets the label; the values are NOT converted. Channels "
+                   f"recorded in other units are now labelled {label!r}: {text}")
+            warnings.warn(msg, UserWarning, stacklevel=3)
+            notes.append(msg)
     else:
-        labels = sorted(unit_labels - {""}) or [""]
+        labels = sorted(set(unit_of.values()) - {""}) or [""]
         if len(labels) > 1:
             raise ValueError(
                 f"the selected channels carry different units {labels}; a MEF session has one units "
                 "label. Pass units= to choose the label, or select channels of one unit."
             )
         label = labels[0]
-    return plans, notes, label
+    source_units = {n: u for n, u in unit_of.items() if u != label}
+    return plans, notes, label, source_units
 
 
 def _plan_moving(name, c, fs, start, n, factor, precision, rmap, lo, hi, tol, out_of_span, outside):
@@ -472,8 +539,10 @@ def _write_session(plans, readers, rmap, partial, out, label, names, report, n_t
     pw, pw2 = output_passwords or ("", "")
     writer = None
     session = partial / out.name  # named as the final session: mef3io names its files after it
+    # Outside the try: if the folder appeared since the check (another export racing for the
+    # name), this raises FileExistsError and the cleanup below never touches what is not ours.
+    partial.mkdir()
     try:
-        partial.mkdir()
         writer = mef3io.Writer(
             str(session), n_threads=n_threads, units=label, flush="close",
             password1=pw, password2=pw2,
@@ -484,7 +553,7 @@ def _write_session(plans, readers, rmap, partial, out, label, names, report, n_t
         for p in plans:
             groups.setdefault((p.source, p.fs, p.src_start, p.out_origin, p.k0, p.k1, p.precision,
                                p.factor if p.precision is None else 0.0), []).append(p)
-        for group in groups.values():
+        for group in _batches(groups.values(), chunk_seconds):
             first = group[0]
             step = max(1, int(round(chunk_seconds * first.fs)))
             for c0 in range(first.k0, first.k1, step):
@@ -499,6 +568,8 @@ def _write_session(plans, readers, rmap, partial, out, label, names, report, n_t
                 done += (c1 - c0) * len(group)
                 if progress is not None:
                     progress(done, total)
+        if all(p.first_valid is None for p in plans):
+            raise ValueError("nothing to write: every selected channel is a gap over the exported span")
         note = _provenance(report, plans, names)
         t_first = min(p.time_of(p.first_valid) for p in plans if p.first_valid is not None)
         writer.write_annotations([{"time": int(t_first), "type": "Note", "text": note}])
@@ -529,6 +600,16 @@ def _write_session(plans, readers, rmap, partial, out, label, names, report, n_t
         ))
 
 
+def _batches(groups, chunk_seconds: float):
+    """Split each grid group so one chunk holds at most ``_MAX_CHUNK_SAMPLES`` samples (a group
+    of hundreds of high-rate channels would otherwise hold gigabytes per chunk)."""
+    for group in groups:
+        per = max(1, int(round(chunk_seconds * group[0].fs)))
+        size = max(1, _MAX_CHUNK_SAMPLES // per)
+        for i in range(0, len(group), size):
+            yield group[i : i + size]
+
+
 def _remove(partial: Path) -> None:
     """Remove the folder this run created (it did not exist before the run)."""
     shutil.rmtree(partial, ignore_errors=True)
@@ -536,9 +617,7 @@ def _remove(partial: Path) -> None:
 
 def _read_window(reader, names: list[str], t0: int, t1: int, n: int) -> np.ndarray:
     """``(len(names), n)`` physical values of ``[t0, t1)``, NaN where the recording has none."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        arr = reader.read(names if len(names) > 1 else names[0], t0, t1)
+    arr = reader.read(names if len(names) > 1 else names[0], t0, t1)
     arr = np.asarray(arr, dtype=np.float64).reshape(len(names), -1)
     if arr.shape[1] == n:
         return arr
@@ -637,10 +716,18 @@ def _provenance(report: ExportReport, plans: list[_Plan], names: dict[str, str])
         "moving_channels": [p.src_name for p in plans if p.source == "moving"],
         "output_channels": [p.out_name for p in plans],
     }
+    if report.source_units:  # labels replaced by units= (values not converted)
+        doc["units"] = report.units
+        doc["source_units"] = dict(sorted(report.source_units.items()))
     text = json.dumps(doc, sort_keys=True, separators=(",", ":"))
     if len(text) > _MAX_NOTE_CHARS:
         for key in ("reference_channels", "moving_channels", "output_channels"):
             doc[key] = len(doc[key])
+        if "source_units" in doc:  # summarised as channels per original label
+            units_count: dict[str, int] = {}
+            for u in doc["source_units"].values():
+                units_count[u] = units_count.get(u, 0) + 1
+            doc["source_units"] = units_count
         text = json.dumps(doc, sort_keys=True, separators=(",", ":"))
     return text
 
