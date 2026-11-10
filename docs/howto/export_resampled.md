@@ -79,6 +79,13 @@ byte-identical apart from their random header ids) nor on `chunk_seconds`. Memor
 fetched around each chunk, never loaded whole. (The RED block layout inside the files follows the
 chunking; the decoded samples do not.)
 
+## Which samples are exported
+
+How much of each channel is exported is decided from the recording's block index, not from the start
+and end times in the file headers. Some recorders write a header end that is the start of the last
+block, or leave a stale one after an interrupted write; trusting it would drop the last seconds
+without a word.
+
 ## Safe by construction
 
 - The output must not exist; neither must `<output>.partial`. Nothing existing is overwritten or

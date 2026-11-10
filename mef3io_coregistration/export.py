@@ -327,8 +327,24 @@ def export_coregistered(
 
 
 # -- planning ---------------------------------------------------------------------------------
+def _index_span(reader, channel: str) -> tuple[int, int]:
+    """``(start, end)`` uUTC of a channel's data from the block index (``.tidx``), never from the
+    ``.tmet`` header times: a header END can equal the last block's start (some writers) or be stale
+    after an interrupted append, and a header START can be late, so selecting data by them would
+    silently drop blocks. ``end`` is just past the last sample. The Reader caches the index, so this
+    opens no further file."""
+    env = reader.block_envelope(channel)
+    starts, ends = env["start_uutc"], env["end_uutc"]
+    if len(starts) == 0:
+        raise ValueError(f"channel {channel!r} has no data blocks")
+    return int(starts[0]), int(ends[-1])
+
+
 def _time_span(reader) -> tuple[int | None, int | None]:
-    """:func:`~mef3io_coregistration.io.mef_reader.time_span` of an open mef3io Reader."""
+    """:func:`~mef3io_coregistration.io.mef_reader.time_span` of an open mef3io Reader (header
+    times, on purpose). Only for the identity check against the span a result stored, which is
+    computed the same way: it must agree with ``time_span``, and it selects no data. Data
+    selection uses :func:`_index_span`."""
     starts, ends = [], []
     for ch in reader.channels:
         try:
@@ -428,7 +444,7 @@ def _plan(ref_r, mov_r, rmap, ref_sel, mov_sel, ref_prefix, mov_prefix, out_of_s
         reader = ref_r if source == "reference" else mov_r
         info = dict(reader.info(c))
         fs = float(info["sampling_frequency"])
-        start, end = int(info["start_time"]), int(info["end_time"])
+        start, end = _index_span(reader, c)
         period = US_PER_S / fs
         n = int(round((end - start) / period))
         if n < 1:
@@ -750,16 +766,17 @@ def _verify(session: Path, plans: list[_Plan], n_threads: int, password: str) ->
             if p.n_stored == 0:
                 continue
             info = r.info(p.out_name)
+            i0, i1 = _index_span(r, p.out_name)
             t_first = p.time_of(p.first_valid)
             if float(info["sampling_frequency"]) != p.fs:
                 bad(f"{p.out_name}: sampling rate {info['sampling_frequency']} instead of {p.fs}")
             if int(info["number_of_samples"]) != p.n_stored:
                 bad(f"{p.out_name}: {info['number_of_samples']} samples instead of {p.n_stored}")
-            if abs(int(info["start_time"]) - t_first) > 1:
-                bad(f"{p.out_name}: starts at {info['start_time']} instead of {t_first}")
+            if abs(i0 - t_first) > 1:
+                bad(f"{p.out_name}: starts at {i0} instead of {t_first}")
             t_end = p.time_of(p.last_valid + 1)
-            if abs(int(info["end_time"]) - t_end) > 2:
-                bad(f"{p.out_name}: ends at {info['end_time']} instead of {t_end}")
+            if abs(i1 - t_end) > 2:
+                bad(f"{p.out_name}: ends at {i1} instead of {t_end}")
             m = min(_VERIFY_EDGE, p.k1 - p.k0)
             for expect, g0 in ((p.head[:m], p.k0), (p.tail[-m:], p.k1 - m)):
                 got = np.asarray(r.read(p.out_name, p.time_of(g0), p.time_of(g0 + m)), dtype=np.float64)

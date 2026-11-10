@@ -16,6 +16,9 @@
   the session is written next to the output, read back and verified, then renamed into place. An
   existing output is never touched, and a cancelled or failed run removes only what it created.
   ([How-to](https://bnelair.github.io/mef3io-coregistration/howto/export_resampled/))
+- **Export length comes from the block index.** `export_coregistered` sizes each channel from the
+  recording's block index, never from the start and end times in the file headers (which some
+  recorders write short or late), so no block is dropped from such files.
 - **mef3io 2.3.** The dependency is now `mef3io>=2.3.0,<3` (multi-channel `Reader.read` and
   `Writer.write_many`).
 

@@ -546,3 +546,61 @@ def test_a_partial_folder_appearing_meanwhile_is_not_removed(world, tmp_path, mo
     with pytest.raises(FileExistsError):
         export_coregistered(world["res"], out, world["a"], world["b"], moving_prefix="B_")
     assert (tmp_path / "race.mefd.partial" / "theirs.txt").read_text() == "theirs"
+
+
+# -- channel span comes from the block index, never from the .tmet header times -----------------
+def _patch_tmet_time(session, channel, offset, value_fn):
+    """Rewrite one universal-header time (16 = start, 24 = end) of a channel's .tmet in a COPY of
+    a session, keeping the stored sign and fixing the header CRC."""
+    import struct
+
+    from mef3io import _mef3io as ext
+
+    tmet = next(Path(session).glob(f"{channel}.timd/*.segd/*.tmet"))
+    raw = bytearray(tmet.read_bytes())
+    old = struct.unpack_from("<q", raw, offset)[0]
+    new = value_fn(abs(old))
+    struct.pack_into("<q", raw, offset, -new if old < 0 else new)
+    struct.pack_into("<I", raw, 0, ext.crc32(bytes(raw[4:1024])))
+    tmet.write_bytes(bytes(raw))
+    return abs(old), new
+
+
+def _patched_world(world, tmp_path, which, channel, offset, value_fn):
+    import shutil
+
+    a, b = tmp_path / "a.mefd", tmp_path / "b.mefd"
+    shutil.copytree(world["a"], a)
+    shutil.copytree(world["b"], b)
+    old, new = _patch_tmet_time({"A": a, "B": b}[which], channel, offset, value_fn)
+    assert old != new
+    return a, b
+
+
+@pytest.mark.parametrize("which,channel", [("A", "x"), ("B", "m3")])
+def test_a_header_end_at_the_last_block_start_loses_no_samples(world, tmp_path, which, channel):
+    base, _ = _export(world, f"span_base_{which}.mefd")
+    block_us = 10 * US_PER_S
+    a, b = _patched_world(world, tmp_path, which, channel, 24, lambda e: e - block_us)
+    with mef3io.Reader(str({"A": a, "B": b}[which])) as r:  # the header really is short
+        assert int(r.info(channel)["end_time"]) < int(r.block_envelope(channel)["end_uutc"][-1]) - 5 * US_PER_S
+    out = tmp_path / "span_out.mefd"
+    export_coregistered(world["res"], out, a, b, moving_prefix="B_", verify_inputs=False)
+    want, got = _read_all(base), _read_all(out)
+    assert want.keys() == got.keys()
+    for c in want:
+        np.testing.assert_array_equal(got[c][0], want[c][0])
+        assert got[c][1:] == want[c][1:]
+
+
+@pytest.mark.parametrize("which,channel", [("A", "x"), ("B", "m3")])
+def test_a_late_header_start_loses_no_samples(world, tmp_path, which, channel):
+    base, _ = _export(world, f"late_base_{which}.mefd")
+    a, b = _patched_world(world, tmp_path, which, channel, 16, lambda s: s + 20 * US_PER_S)
+    out = tmp_path / "late_out.mefd"
+    export_coregistered(world["res"], out, a, b, moving_prefix="B_", verify_inputs=False)
+    want, got = _read_all(base), _read_all(out)
+    for c in want:
+        np.testing.assert_array_equal(got[c][0], want[c][0])
+        assert got[c][1:] == want[c][1:]
+
