@@ -327,17 +327,25 @@ def _span_distance(have: tuple[int, int], want: tuple[int, int]) -> int:
     return max(abs(have[0] - want[0]), abs(have[1] - want[1]))
 
 
+def _nearest(haves: list, want: tuple[int, int]) -> int | None:
+    """Distance of the closest of a file's candidate spans (index, header) to a stored span."""
+    return min((_span_distance(h, want) for h in haves), default=None)
+
+
 def _check_spans(res, paths: dict[str, str], passwords: dict[str, str | None],
-                 spans: dict[str, tuple[int | None, int | None]] | None = None) -> None:
+                 spans: dict[str, tuple[int | None, int | None]] | None = None,
+                 header_spans: dict[str, tuple[int | None, int | None]] | None = None) -> None:
     """Each file must start and end within ``SPAN_TOLERANCE_US`` of the span the result stores for
     its role — the only check (paths, channels, rates do not matter). A file that matches the OTHER
     role's span more closely is refused as a swapped A/B: the map would otherwise be applied to the
     wrong file. Two recordings with identical spans cannot be told apart this way.
     ``spans`` (role -> ``time_span`` result) lets a caller that already has the files open pass
-    them, so they are not opened a second time."""
+    them, so they are not opened a second time (``header_spans``: the same from the ``.tmet``
+    header times). A file's span is its block-index span; results saved before 0.4 stored the
+    header span, so a match on EITHER counts (within the tolerance)."""
     import warnings
 
-    from ..io.mef_reader import SPAN_TOLERANCE_US, time_span
+    from ..io.mef_reader import SPAN_TOLERANCE_US, time_spans
 
     stored = {role: _stored_span(res, role) for role in ("A", "B")}
     for role, path in paths.items():
@@ -348,15 +356,19 @@ def _check_spans(res, paths: dict[str, str], passwords: dict[str, str | None],
                 UserWarning, stacklevel=4,
             )
             continue
-        h0, h1 = spans[role] if spans is not None else time_span(path, password=passwords.get(role))
+        if spans is not None:
+            (h0, h1), hh = spans[role], (header_spans or {}).get(role)
+        else:
+            (h0, h1), hh = time_spans(path, password=passwords.get(role))
         have = None if h0 is None or h1 is None else (h0, h1)
-        own = None if have is None else _span_distance(have, want)
+        haves = [h for h in (have, hh if hh and None not in hh else None) if h is not None]
+        own = _nearest(haves, want)
         other = "B" if role == "A" else "A"
         other_span = stored[other]
         # Swapped first: a file that IS the other role's recording would otherwise only get the
         # generic message below.
         if have is not None and own is not None and other_span is not None:
-            to_other = _span_distance(have, other_span)
+            to_other = _nearest(haves, other_span)
             if to_other <= SPAN_TOLERANCE_US and to_other < own:
                 raise ValueError(
                     f"file {role} ({path}) has file {other}'s time span ({_span_text(h0, h1)}), not "

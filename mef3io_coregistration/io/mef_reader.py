@@ -280,19 +280,34 @@ def _fit_length(data: np.ndarray, n: int) -> np.ndarray:
 SPAN_TOLERANCE_US = 1_000_000
 
 
-def time_span(path: str | Path, password: str | None = None) -> tuple[int | None, int | None]:
-    """``(start_uutc, end_uutc)`` of a MEF3 recording: the earliest channel start and the latest
-    channel end, from metadata only. ``(None, None)`` when no channel can be described."""
-    starts, ends = [], []
+def time_spans(path: str | Path, password: str | None = None) -> tuple[tuple, tuple]:
+    """``(index_span, header_span)``, each ``(start_uutc, end_uutc)`` or ``(None, None)``, of a MEF3
+    recording in ONE open: the earliest channel start and the latest channel end, from the block
+    index and from the ``.tmet`` header times (results saved before 0.4 stored the latter, so
+    only identity matching uses them)."""
+    idx: list[tuple[int, int]] = []
+    hdr: list[tuple[int, int]] = []
     with MefChannelReader(path, password=password) as r:
         for ch in r.channels:
             try:
+                i = r.info(ch)
                 c0, c1 = r.time_bounds(ch)
+                h = (int(i["start_time_header"]), int(i["end_time_header"]))
             except Exception:  # a channel the reader cannot describe has no span
                 continue
-            starts.append(c0)
-            ends.append(c1)
-    return (min(starts), max(ends)) if starts else (None, None)
+            idx.append((c0, c1))
+            hdr.append(h)
+
+    def agg(v):
+        return (min(x[0] for x in v), max(x[1] for x in v)) if v else (None, None)
+
+    return agg(idx), agg(hdr)
+
+
+def time_span(path: str | Path, password: str | None = None) -> tuple[int | None, int | None]:
+    """``(start_uutc, end_uutc)`` of a MEF3 recording from the block index, metadata only.
+    ``(None, None)`` when no channel can be described."""
+    return time_spans(path, password)[0]
 
 
 #: Samples hashed per window, and the windows (as fractions of each channel's span) whose stored

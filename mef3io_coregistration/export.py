@@ -297,7 +297,9 @@ def export_coregistered(
                 readers[role] = mef3io.Reader(paths[role], password=passwords[role] or "", n_threads=n_threads)
         if verify_inputs:  # from the readers just opened: each file is opened once
             _check_spans(res, paths, {"A": password_a, "B": password_b},
-                         spans={role: _time_span(readers[role]) for role in ("A", "B")})
+                         spans={role: _time_span(readers[role]) for role in ("A", "B")},
+                         header_spans={role: _time_span(readers[role], header=True)
+                                       for role in ("A", "B")})
         ref_r, mov_r = readers[ref_role], readers[mov_role]
         plans, notes, label, source_units = _plan(
             ref_r, mov_r, rmap, reference_channels, moving_channels, reference_prefix, moving_prefix,
@@ -327,14 +329,18 @@ def export_coregistered(
 
 
 # -- planning ---------------------------------------------------------------------------------
-def _time_span(reader) -> tuple[int | None, int | None]:
+def _time_span(reader, header: bool = False) -> tuple[int | None, int | None]:
     """:func:`~mef3io_coregistration.io.mef_reader.time_span` of an open mef3io Reader (from the
     block index). Only for the identity check against the span a result stored, which is computed
     the same way: it must agree with ``time_span``. Data selection uses :func:`~mef3io_coregistration.io.mef_reader.index_span`."""
     starts, ends = [], []
     for ch in reader.channels:
         try:
-            c0, c1 = index_span(reader, ch)
+            if header:  # only to match results saved before 0.4 (they stored the header span)
+                info = reader.info(ch)
+                c0, c1 = int(info["start_time"]), int(info["end_time"])
+            else:
+                c0, c1 = index_span(reader, ch)
         except Exception:  # a channel that cannot be described has no span (as time_span)
             continue
         starts.append(c0)

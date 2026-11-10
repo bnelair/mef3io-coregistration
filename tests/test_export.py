@@ -13,7 +13,7 @@ from pathlib import Path
 import mef3io
 import numpy as np
 import pytest
-from _synth import patched_world
+from _synth import patch_tmet_time, patched_world
 
 from mef3io_coregistration.config import US_PER_S
 from mef3io_coregistration.export import (
@@ -577,3 +577,47 @@ def test_a_late_header_start_loses_no_samples(world, tmp_path, which, channel):
         np.testing.assert_array_equal(got[c][0], want[c][0])
         assert got[c][1:] == want[c][1:]
 
+
+
+# -- identity check: a result saved before 0.4 stored the HEADER span ---------------------------
+def _result_with_span(world, tmp_path, role, span):
+    import dataclasses
+
+    from mef3io_coregistration.result import CoregResult
+    res = CoregResult.load(world["res"])
+    fps = {r: dict(f) for r, f in res.file_fingerprints.items()}
+    fps[role]["start_uutc"], fps[role]["end_uutc"] = span
+    p = tmp_path / f"old_{role}.coreg.json"
+    dataclasses.replace(res, file_fingerprints=fps).save(p)
+    return p
+
+
+def test_a_result_with_the_header_span_still_opens_its_files(world, tmp_path):
+    from mef3io_coregistration.reader.coregistered_reader import _check_spans
+    from mef3io_coregistration.result import CoregResult
+    a, b = patched_world(world, tmp_path, "B", "m3", 24, lambda e: e - 10 * US_PER_S)
+    for ch in ("x", "m2"):  # every channel's header end is short, so the recording's is
+        patch_tmet_time(b, ch, 24, lambda e: e - 10 * US_PER_S)
+    with mef3io.Reader(str(b)) as r:
+        hdr = (min(int(r.info(c)["start_time"]) for c in r.channels),
+               max(int(r.info(c)["end_time"]) for c in r.channels))
+        idx = (min(int(r.block_envelope(c)["start_uutc"][0]) for c in r.channels),
+               max(int(r.block_envelope(c)["end_uutc"][-1]) for c in r.channels))
+    assert abs(hdr[1] - idx[1]) > 5 * US_PER_S  # the header span really differs from the index span
+    for span in (hdr, idx):  # saved by 0.3 (header) or by this version (index)
+        res = CoregResult.load(_result_with_span(world, tmp_path, "B", span))
+        _check_spans(res, {"A": str(a), "B": str(b)}, {})
+        out = tmp_path / f"o{span[1]}.mefd"
+        export_coregistered(_result_with_span(world, tmp_path, "B", span), out, a, b, moving_prefix="B_")
+        assert out.exists()
+
+
+def test_a_different_recording_is_still_refused(world, tmp_path):
+    from mef3io_coregistration.reader.coregistered_reader import _check_spans
+    from mef3io_coregistration.result import CoregResult
+    a, b = patched_world(world, tmp_path, "B", "m3", 24, lambda e: e - 10 * US_PER_S)
+    base = CoregResult.load(world["res"]).file_fingerprints["B"]
+    far = (base["start_uutc"] + 30 * US_PER_S, base["end_uutc"] + 30 * US_PER_S)
+    res = CoregResult.load(_result_with_span(world, tmp_path, "B", far))
+    with pytest.raises(ValueError, match="not the recording"):
+        _check_spans(res, {"A": str(a), "B": str(b)}, {})
