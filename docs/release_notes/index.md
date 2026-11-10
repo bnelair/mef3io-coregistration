@@ -5,6 +5,6 @@ asks of you. Newest first.
 
 | Version | Released | Main changes |
 |---|---|---|
-| [Unreleased](unreleased.md) | not yet released | `export_coregistered`: a new MEF 3.0 session with both recordings on the reference clock; requires mef3io 2.3 |
+| [0.4.0](0.4.0.md) | 2026-11-09 | `export_coregistered`: a new MEF 3.0 session with both recordings on the reference clock; channel length from the block index; requires mef3io 2.3 |
 | [0.3.1](0.3.1.md) | 2026-10-21 | compressed results (`.json.gz`) everywhere; reopen a saved result in `CoregSession` |
 | [0.3.0](0.3.0.md) | 2026-10-19 | first public release: alignment of two MEF 3.0 recordings on drifting clocks (gross, fine, drift), the saved result, reading one file or both on the reference clock, the review report |

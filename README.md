@@ -38,7 +38,7 @@ pip install mef3io-coregistration
 ```
 
 Python 3.11+; depends on numpy, scipy and
-[mef3io](https://pypi.org/project/mef3io/). The plotted review report needs
+[mef3io](https://pypi.org/project/mef3io/) 2.3 or newer. The plotted review report needs
 matplotlib: `pip install "mef3io-coregistration[report]"`. Details:
 [Install](https://bnelair.github.io/mef3io-coregistration/install/).
 

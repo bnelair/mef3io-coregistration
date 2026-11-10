@@ -10,7 +10,7 @@ pip install mef3io-coregistration
 
 Python 3.11 or newer on Linux, macOS or Windows. It is pure Python; the
 dependencies are numpy, scipy and [mef3io](https://pypi.org/project/mef3io/)
-(which brings the compiled MEF 3.0 core as a wheel for every platform).
+(2.3 or newer, which brings the compiled MEF 3.0 core as a wheel for every platform).
 
 ## Optional extras
 
