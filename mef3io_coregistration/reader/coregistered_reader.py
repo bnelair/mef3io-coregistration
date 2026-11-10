@@ -327,11 +327,14 @@ def _span_distance(have: tuple[int, int], want: tuple[int, int]) -> int:
     return max(abs(have[0] - want[0]), abs(have[1] - want[1]))
 
 
-def _check_spans(res, paths: dict[str, str], passwords: dict[str, str | None]) -> None:
+def _check_spans(res, paths: dict[str, str], passwords: dict[str, str | None],
+                 spans: dict[str, tuple[int | None, int | None]] | None = None) -> None:
     """Each file must start and end within ``SPAN_TOLERANCE_US`` of the span the result stores for
     its role — the only check (paths, channels, rates do not matter). A file that matches the OTHER
     role's span more closely is refused as a swapped A/B: the map would otherwise be applied to the
-    wrong file. Two recordings with identical spans cannot be told apart this way."""
+    wrong file. Two recordings with identical spans cannot be told apart this way.
+    ``spans`` (role -> ``time_span`` result) lets a caller that already has the files open pass
+    them, so they are not opened a second time."""
     import warnings
 
     from ..io.mef_reader import SPAN_TOLERANCE_US, time_span
@@ -345,7 +348,7 @@ def _check_spans(res, paths: dict[str, str], passwords: dict[str, str | None]) -
                 UserWarning, stacklevel=4,
             )
             continue
-        h0, h1 = time_span(path, password=passwords.get(role))
+        h0, h1 = spans[role] if spans is not None else time_span(path, password=passwords.get(role))
         have = None if h0 is None or h1 is None else (h0, h1)
         own = None if have is None else _span_distance(have, want)
         other = "B" if role == "A" else "A"

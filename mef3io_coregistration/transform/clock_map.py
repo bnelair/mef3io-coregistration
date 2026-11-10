@@ -124,7 +124,7 @@ class ClockMap:
             hi = np.full(target.shape, x1)
             for _ in range(60):  # 2^-60 of the domain → far below µs resolution
                 mid = 0.5 * (lo + hi)
-                fm = np.asarray(self.forward(np.rint(mid).astype(np.int64)), dtype=np.float64)
+                fm = np.asarray(self.forward(mid), dtype=np.float64)  # float: no µs staircase
                 go_right = fm < target
                 lo = np.where(go_right, mid, lo)
                 hi = np.where(go_right, hi, mid)

@@ -16,6 +16,7 @@ Install: `pip install mef3io-coregistration` (Python 3.11+; numpy, scipy, mef3io
 - [Read a coregistration in Python](https://bnelair.github.io/mef3io-coregistration/howto/read_python/): one file on the reference clock, both files as one, event times between the clocks, sample-aligned arrays
 - [Align two recordings in Python](https://bnelair.github.io/mef3io-coregistration/howto/align_python/): CoregSession from two .mefd paths to a saved result; what to do when a stage does not lock
 - [Open a result from a pipeline](https://bnelair.github.io/mef3io-coregistration/howto/pipeline/): passing the recordings' current paths, matching by time span, swapped files, saved channel mappings
+- [Write a coregistered session](https://bnelair.github.io/mef3io-coregistration/howto/export_resampled/): export_coregistered writes a new .mefd with both recordings on the reference clock (chosen channels, resampled moving channels, n_threads, progress/cancel)
 - [Review a coregistration](https://bnelair.github.io/mef3io-coregistration/howto/review_report/): sigcoreg-review and its figures
 
 ## Reference

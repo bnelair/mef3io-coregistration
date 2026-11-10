@@ -147,3 +147,14 @@ def test_property_roundtrip_and_monotone(cm):
     assert np.all(np.diff(fwd) > 0)  # strictly monotone map
     back = np.asarray(cm.inverse(fwd))
     assert np.max(np.abs(back - q)) <= 4.0  # µs, invertible
+
+
+def test_pchip_inverse_is_not_quantised_to_whole_microseconds():
+    """The bisection evaluated forward() at whole µs, so inverse() was a 1 µs staircase (round
+    trip off by up to 0.5 µs); on floats it is limited only by float64 at absolute uUTC."""
+    start = 1_700_000_000_000_000
+    xs = np.linspace(0, 3600, 30) * 1e6
+    ys = xs + 12e6 + 1e-4 * xs + 3e5 * np.sin(xs / 1e9)
+    cm = ClockMap((start + xs).astype(np.int64), (start + ys).astype(np.int64), interp_method="pchip")
+    t = start + np.linspace(1e6, 3500e6, 2000) + 0.37
+    assert np.abs(cm.inverse(cm.forward(t)) - t).max() <= 0.25  # one float64 ulp at 1.7e15

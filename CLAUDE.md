@@ -8,15 +8,14 @@ one recording on the reference clock. Depends on numpy, scipy and
 extra). All MEF 3.0 access goes through mef3io's public API — never parse MEF
 bytes here; a missing MEF capability is a mef3io issue first.
 
-Status: 0.3.0, first public release in preparation (VERSION = 0.3.0, release
-notes `docs/release_notes/0.3.0.md` still a draft). Complete: Stage 1 gross
+Status: 0.3.x released; unreleased notes in `docs/release_notes/unreleased.md`. Complete: Stage 1 gross
 (stacked multi-template matched filter, lock by agreement), offset
 verification, Stage 2 fine (seeded NCC + local seed refinement), Stage 3 drift
 (outward walk from every anchor, weighted smoothing spline), no-drift map
 build, `CoregSession` orchestration with background loaders, `CoregResult`
 JSON, the readers (`CoregisteredSession`, `CoregisteredMefReader`,
 `CoregisteredRecording`, `CoregisteredReader`), the synthetic harness and the
-review report. A web console built on this engine is a separate, private
+review report, and `export_coregistered` (a new MEF 3.0 session on the reference clock, mef3io >= 2.3). A web console built on this engine is a separate, private
 project; nothing here may depend on it or name it.
 
 ## Build & test (use the active conda env for everything)
@@ -75,6 +74,11 @@ regenerate when the harness version or profile changes.
 - `synthetic/` — `WarpSpec` analytic offsets, `render_pair(_long)`, cached
   fixture profiles (`build_or_load`).
 - `review/` — `report.build/main` = `sigcoreg-review` (matplotlib, Agg).
+- `export.py` — `export_coregistered`: a NEW `.mefd` from a result + the two recordings (reference
+  channels native, moving channels `evaluate_at`-resampled onto a reference-clock grid at their own
+  rate; chunked with `support_samples` margins; `n_threads` = mef3io's one rule to Reader, Writer and
+  the resampling pool; `Reader.read([...])` / `Writer.write_many`; staged in `<out>.partial/`, read
+  back, renamed). Reader core only (no `align`/`session`).
 - `config.py` — every threshold, with the measurement behind it in comments.
 
 The reader core (`result`, `transform`, `io`, `montage`, `reader`, `config`)
@@ -133,6 +137,20 @@ NEVER imports `align`, `session`, `synthetic` or `review`.
 - Stage 3 walks from every anchor; a search-edge peak is not a measurement;
   a bad anchor shows in its residual, not in the map (`test_drift.py::test_anchor_far_from_start_realistic_rate`,
   `::test_search_edge_peak_is_not_a_measurement`, `::test_bad_anchor_shows_in_residual_not_in_map`).
+- Export never overwrites or deletes: an existing output or `<out>.partial` is refused, cancel/failure
+  remove only the staging folder, inputs are read-only
+  (`test_export.py::test_existing_output_is_refused_and_untouched`, `::test_cancel_removes_only_its_own_files`,
+  `::test_inputs_are_not_modified`). Reference channels are written unchanged, moving ones resampled to
+  the true signal, gaps stay NaN, both directions use the right (inverse) map
+  (`::test_reference_untouched_and_moving_resampled_to_truth`, `::test_gaps_stay_gaps`,
+  `::test_direction_swap_uses_the_inverse`, `::test_pchip_map_inverted`). Output does not depend on
+  `n_threads` (bytes, headers apart) or `chunk_seconds` (decoded values and times)
+  (`::test_n_threads_does_not_change_the_output`, `::test_chunk_size_does_not_change_the_values_or_times`,
+  `::test_odd_rates_survive_chunking`). A clash of channel names and a moving channel beyond the
+  measured span are REFUSED, never renamed/extrapolated silently
+  (`::test_name_collision_is_refused_unless_prefixed`, `::test_out_of_span_refuses_by_default_and_can_trim_or_extrapolate`).
+  mef3io rules the export depends on: a session folder must end in `.mefd` and mef3io names its
+  record files after it (so staging is `<out>.partial/<out name>`), and the two passwords must differ.
 - Streaming load equals a full pass; loads cancel; a dead worker is reported,
   not hung (`test_loader.py`).
 - End to end: a synthetic drift is recovered to < 1 sample RMS and the

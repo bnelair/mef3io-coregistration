@@ -17,7 +17,7 @@ import pytest
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 SCRIPTS = sorted(EXAMPLES.glob("[0-9][0-9]_*.py"))
-SELF_CONTAINED = {"01_align_synthetic_pair.py"}  # the rest need a user's result and recordings
+SELF_CONTAINED = {"01_align_synthetic_pair.py", "04_export_coregistered.py"}  # the rest need a user's result and recordings
 # Examples print non-ASCII (arrows, dashes); a Windows console pipe is not UTF-8 by default.
 _ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
 
@@ -48,6 +48,10 @@ def test_self_contained_example_runs(name):
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     out = proc.stdout
+    if name.startswith("04"):
+        assert "B_C3 (moving, 200 Hz" in out and "C3 (reference, 256 Hz" in out, out
+        assert float(re.search(r"error against the true signal ([0-9.]+)", out).group(1)) < 0.1, out
+        return
     assert "locked=True" in out
     assert "saved pair.coreg.json" in out
     r = float(re.search(r"r = ([0-9.]+)", out).group(1))
