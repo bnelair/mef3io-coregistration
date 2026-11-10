@@ -8,7 +8,7 @@ one recording on the reference clock. Depends on numpy, scipy and
 extra). All MEF 3.0 access goes through mef3io's public API — never parse MEF
 bytes here; a missing MEF capability is a mef3io issue first.
 
-Status: 0.3.x released; unreleased notes in `docs/release_notes/unreleased.md`. Complete: Stage 1 gross
+Status: 0.4.0 released (notes in `docs/release_notes/0.4.0.md`); between releases, notes collect in `docs/release_notes/unreleased.md`. Complete: Stage 1 gross
 (stacked multi-template matched filter, lock by agreement), offset
 verification, Stage 2 fine (seeded NCC + local seed refinement), Stage 3 drift
 (outward walk from every anchor, weighted smoothing spline), no-drift map

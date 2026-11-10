@@ -15,7 +15,8 @@ themselves and saves it as a **clock map**, a monotone function from the
 reference recording's clock to the other ("moving") recording's clock, in a
 small JSON result with a record of how it was made. It then reads either
 file, or both together, through that result: every time you pass in or get
-back is on the reference clock. The recordings are never changed or copied.
+back is on the reference clock. The recordings are never changed; an export
+writes a new session beside them.
 All MEF 3.0 access goes through [mef3io](https://github.com/bnelair/mef3io).
 
 !!! tip "Check before you trust"

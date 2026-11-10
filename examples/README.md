@@ -6,8 +6,8 @@ Small scripts, each runnable directly:
 python examples/01_align_synthetic_pair.py
 ```
 
-`01` is self-contained: it writes a synthetic pair of recordings under a
-temporary directory and prints what it does. `02` and `03` work on your own
+`01` and `04` are self-contained: they write a synthetic pair of recordings under a
+temporary directory and print what they do. `02` and `03` work on your own
 saved result and the two recordings it names. Times in MEF 3.0 are **uUTC** —
 microseconds since the Unix epoch.
 
