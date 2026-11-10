@@ -25,6 +25,19 @@ from ..config import US_PER_S
 from ..transform.resample import first_index_at_or_after
 
 
+def index_span(reader, channel: str) -> tuple[int, int]:
+    """``(start, end)`` uUTC of a channel's data from the block index (``.tidx``), never from the
+    ``.tmet`` header times: a header END can equal the last block's start (some writers) or be stale
+    after an interrupted append, and a header START can be late, so selecting data by them would
+    silently drop blocks. ``end`` is just past the last sample. The mef3io Reader caches the index,
+    so this opens no further file."""
+    env = reader.block_envelope(channel)
+    starts, ends = env["start_uutc"], env["end_uutc"]
+    if len(starts) == 0:
+        raise ValueError(f"channel {channel!r} has no data blocks")
+    return int(starts[0]), int(ends[-1])
+
+
 @dataclass(frozen=True)
 class Gap:
     """A recording discontinuity: no samples exist in ``[start_uutc, end_uutc)``.
@@ -107,10 +120,15 @@ class MefChannelReader:
         return channel in self._channels
 
     def info(self, channel: str) -> dict:
-        """The backend's channel metadata (``mef3io.Reader.info``), cached."""
+        """The backend's channel metadata (``mef3io.Reader.info``), cached, with ``start_time`` /
+        ``end_time`` taken from the block index (the header's are kept as ``*_time_header``)."""
         self._require(channel)
         if channel not in self._info:
-            self._info[channel] = dict(self._reader.info(channel))
+            d = dict(self._reader.info(channel))
+            # the channel's extent is the block index's, not the header's (see index_span)
+            d["start_time_header"], d["end_time_header"] = d["start_time"], d["end_time"]
+            d["start_time"], d["end_time"] = index_span(self._reader, channel)
+            self._info[channel] = d
         return self._info[channel]
 
     def segments(self, channel: str) -> list[dict]:
@@ -262,19 +280,34 @@ def _fit_length(data: np.ndarray, n: int) -> np.ndarray:
 SPAN_TOLERANCE_US = 1_000_000
 
 
-def time_span(path: str | Path, password: str | None = None) -> tuple[int | None, int | None]:
-    """``(start_uutc, end_uutc)`` of a MEF3 recording: the earliest channel start and the latest
-    channel end, from metadata only. ``(None, None)`` when no channel can be described."""
-    starts, ends = [], []
+def time_spans(path: str | Path, password: str | None = None) -> tuple[tuple, tuple]:
+    """``(index_span, header_span)``, each ``(start_uutc, end_uutc)`` or ``(None, None)``, of a MEF3
+    recording in ONE open: the earliest channel start and the latest channel end, from the block
+    index and from the ``.tmet`` header times (results saved before 0.4 stored the latter, so
+    only identity matching uses them)."""
+    idx: list[tuple[int, int]] = []
+    hdr: list[tuple[int, int]] = []
     with MefChannelReader(path, password=password) as r:
         for ch in r.channels:
             try:
+                i = r.info(ch)
                 c0, c1 = r.time_bounds(ch)
+                h = (int(i["start_time_header"]), int(i["end_time_header"]))
             except Exception:  # a channel the reader cannot describe has no span
                 continue
-            starts.append(c0)
-            ends.append(c1)
-    return (min(starts), max(ends)) if starts else (None, None)
+            idx.append((c0, c1))
+            hdr.append(h)
+
+    def agg(v):
+        return (min(x[0] for x in v), max(x[1] for x in v)) if v else (None, None)
+
+    return agg(idx), agg(hdr)
+
+
+def time_span(path: str | Path, password: str | None = None) -> tuple[int | None, int | None]:
+    """``(start_uutc, end_uutc)`` of a MEF3 recording from the block index, metadata only.
+    ``(None, None)`` when no channel can be described."""
+    return time_spans(path, password)[0]
 
 
 #: Samples hashed per window, and the windows (as fractions of each channel's span) whose stored

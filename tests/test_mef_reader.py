@@ -124,3 +124,30 @@ def test_continuous_channel_has_no_gaps(shared_data_dir):
         rd = reader.read("ch1")
         assert reader.gaps("ch1") == ()
     assert not np.any(np.isnan(rd.data))
+
+
+# --------------------------------------------------------------------------- #
+# channel extent comes from the block index, not the .tmet header times (#5)
+# --------------------------------------------------------------------------- #
+@pytest.fixture(scope="module")
+def _one_channel(tmp_path_factory):
+    import mef3io
+    path = tmp_path_factory.mktemp("span") / "s.mefd"
+    n = 100 * 35  # 35 s at 100 Hz: several blocks
+    with mef3io.Writer(str(path), overwrite=True) as w:
+        w.write("x", np.sin(np.arange(n) / 20.0), _EPOCH, 100.0, precision=3)
+    return {"a": path, "b": path}, n
+
+
+@pytest.mark.parametrize("offset,fn", [(24, lambda e: e - 10 * US_PER_S), (16, lambda s: s + 20 * US_PER_S)])
+def test_a_wrong_header_time_does_not_shorten_the_channel(_one_channel, tmp_path, offset, fn):
+    from _synth import patched_world
+    world, n = _one_channel
+    a, _ = patched_world(world, tmp_path, "A", "x", offset, fn)
+    with MefChannelReader(a) as r:
+        assert r.info("x")["start_time_header"] != r.info("x")["start_time"] or \
+            r.info("x")["end_time_header"] != r.info("x")["end_time"]  # the header really is off
+        t0, t1 = r.time_bounds("x")
+        assert (t0, t1) == (_EPOCH, _EPOCH + 35 * US_PER_S)
+        rd = r.read("x", t0, t1)
+    assert rd.n == n and not np.isnan(rd.data).any()
