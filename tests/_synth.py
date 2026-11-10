@@ -7,6 +7,8 @@ the ~50 Hz min-max envelopes (Stage 1) and the decimated traces at a common targ
 """
 from __future__ import annotations
 
+import shutil
+import struct
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -120,3 +122,28 @@ def corrupt_segment(dec: Decimated, t0_rel_s: float, t1_rel_s: float, seed: int 
     rng = np.random.default_rng(seed)
     data[i0:i1] = rng.standard_normal(i1 - i0) * float(np.std(dec.data))
     return Decimated(data, dec.fs, dec.start_uutc)
+
+
+def patch_tmet_time(session, channel, offset, value_fn):
+    """Rewrite one universal-header time (16 = start, 24 = end) of a channel's .tmet in a COPY of
+    a session, keeping the stored sign and fixing the header CRC."""
+    from mef3io import _mef3io as ext
+
+    tmet = next(Path(session).glob(f"{channel}.timd/*.segd/*.tmet"))
+    raw = bytearray(tmet.read_bytes())
+    old = struct.unpack_from("<q", raw, offset)[0]
+    new = value_fn(abs(old))
+    struct.pack_into("<q", raw, offset, -new if old < 0 else new)
+    struct.pack_into("<I", raw, 0, ext.crc32(bytes(raw[4:1024])))
+    tmet.write_bytes(bytes(raw))
+    return abs(old), new
+
+
+def patched_world(world, tmp_path, which, channel, offset, value_fn):
+    """Copies of ``world["a"]``/``["b"]`` with one header time of ``channel`` in ``which`` patched."""
+    a, b = tmp_path / "a.mefd", tmp_path / "b.mefd"
+    shutil.copytree(world["a"], a)
+    shutil.copytree(world["b"], b)
+    old, new = patch_tmet_time({"A": a, "B": b}[which], channel, offset, value_fn)
+    assert old != new
+    return a, b

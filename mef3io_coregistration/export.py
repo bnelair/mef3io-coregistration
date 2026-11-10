@@ -56,7 +56,7 @@ import numpy as np
 from . import __version__
 from .config import US_PER_S
 from .io.jsonfile import content_sha256, dumps, file_name
-from .io.mef_reader import SPAN_TOLERANCE_US
+from .io.mef_reader import SPAN_TOLERANCE_US, index_span
 from .reader.coregistered_reader import _check_spans, _locate
 from .result import CoregResult
 from .transform.clock_map import ClockMap
@@ -327,29 +327,14 @@ def export_coregistered(
 
 
 # -- planning ---------------------------------------------------------------------------------
-def _index_span(reader, channel: str) -> tuple[int, int]:
-    """``(start, end)`` uUTC of a channel's data from the block index (``.tidx``), never from the
-    ``.tmet`` header times: a header END can equal the last block's start (some writers) or be stale
-    after an interrupted append, and a header START can be late, so selecting data by them would
-    silently drop blocks. ``end`` is just past the last sample. The Reader caches the index, so this
-    opens no further file."""
-    env = reader.block_envelope(channel)
-    starts, ends = env["start_uutc"], env["end_uutc"]
-    if len(starts) == 0:
-        raise ValueError(f"channel {channel!r} has no data blocks")
-    return int(starts[0]), int(ends[-1])
-
-
 def _time_span(reader) -> tuple[int | None, int | None]:
-    """:func:`~mef3io_coregistration.io.mef_reader.time_span` of an open mef3io Reader (header
-    times, on purpose). Only for the identity check against the span a result stored, which is
-    computed the same way: it must agree with ``time_span``, and it selects no data. Data
-    selection uses :func:`_index_span`."""
+    """:func:`~mef3io_coregistration.io.mef_reader.time_span` of an open mef3io Reader (from the
+    block index). Only for the identity check against the span a result stored, which is computed
+    the same way: it must agree with ``time_span``. Data selection uses :func:`~mef3io_coregistration.io.mef_reader.index_span`."""
     starts, ends = [], []
     for ch in reader.channels:
         try:
-            info = reader.info(ch)
-            c0, c1 = int(info["start_time"]), int(info["end_time"])
+            c0, c1 = index_span(reader, ch)
         except Exception:  # a channel that cannot be described has no span (as time_span)
             continue
         starts.append(c0)
@@ -444,7 +429,7 @@ def _plan(ref_r, mov_r, rmap, ref_sel, mov_sel, ref_prefix, mov_prefix, out_of_s
         reader = ref_r if source == "reference" else mov_r
         info = dict(reader.info(c))
         fs = float(info["sampling_frequency"])
-        start, end = _index_span(reader, c)
+        start, end = index_span(reader, c)
         period = US_PER_S / fs
         n = int(round((end - start) / period))
         if n < 1:
@@ -766,7 +751,7 @@ def _verify(session: Path, plans: list[_Plan], n_threads: int, password: str) ->
             if p.n_stored == 0:
                 continue
             info = r.info(p.out_name)
-            i0, i1 = _index_span(r, p.out_name)
+            i0, i1 = index_span(r, p.out_name)
             t_first = p.time_of(p.first_valid)
             if float(info["sampling_frequency"]) != p.fs:
                 bad(f"{p.out_name}: sampling rate {info['sampling_frequency']} instead of {p.fs}")
